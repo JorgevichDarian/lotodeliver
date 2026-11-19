@@ -1,7 +1,7 @@
 /* App de choferes: guarda la app para que abra sin señal. Primero intenta la red (para tener
    siempre la última versión) y, si no hay, usa la copia guardada. Los datos (Firebase) no pasan por acá. */
 const CACHE = 'choferes-lt-v1';
-const BASICO = ['./', './index.html', './app.js', './app.css', './manifest.webmanifest', './icono-192.png',
+const BASICO = ['./', './index.html', './app.js', './optimo.js', './app.css', './manifest.webmanifest', './icono-192.png',
   '../lt-firebase.js', '../firebase-config.js', '../vendor/leaflet/leaflet.js', '../vendor/leaflet/leaflet.css'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(BASICO)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => {
