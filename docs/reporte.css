@@ -522,3 +522,10 @@ body.otro-dia .dia-ent input{border-color:var(--naranja);box-shadow:0 0 0 1px va
 body.otro-dia #hoy{color:#FFB877;font-weight:600}
 /* en otro día no hay "ahora": se oculta la línea de la hora actual */
 body.otro-dia .ahora,body.otro-dia .tag.a{display:none}
+
+/* ruta óptima (app de choferes) */
+.opt-pos{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:10px;background:#FDEBD9;color:#9A4A06;font-size:12px;font-weight:700;white-space:nowrap;vertical-align:1px}
+.opt-res.bien b{color:var(--verde)}.opt-res.medio b{color:var(--ambar)}.opt-res.mal b{color:var(--rojo)}
+.opt-flota{margin-top:6px}
+.opt-flota b{font-size:15px}
+.opt-flota.bien b{color:var(--verde)}.opt-flota.medio b{color:var(--ambar)}.opt-flota.mal b{color:var(--rojo)}

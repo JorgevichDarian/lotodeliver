@@ -20,6 +20,7 @@
   var st = {
     perfil: null, pat: null, rutas: null, sesiones: {}, visitas: {}, local: {}, descuentos: {},
     vista: 'clientes', filtro: 'pend', gps: { estado: 'apagado' }, pantalla: true,
+    opt: null, verOpt: true, calculando: false,
   };
   var oyentes = [], oyentesRuta = [];
   var mapa = null, capaCli = null, yo = null, encuadrado = false;
@@ -179,6 +180,8 @@
 
   // ---------- pantalla principal ----------
   function pantallaRuta() {
+    var g = leer('ldAppOptimo', null);
+    st.opt = g && g.dia === DIA && g.pat === st.pat && g.uid === fb.sesion().uid ? g : null;
     oyentesRuta.forEach(function (o) { o.cerrar(); });
     oyentesRuta = [fb.escuchar('dias/' + DIA + '/visitas/' + st.pat, function (v) {
       st.visitas = v || {};
@@ -249,22 +252,125 @@
     var r = ruta(), lista = clientes();
     if (!r) { v.innerHTML = '<p class="vacio">' + (st.rutas === null ? 'Cargando la hoja de ruta…' : 'La hoja de ruta de ' + esc(st.pat) + ' no está publicada para ' + (DIA === HOY ? 'hoy' : 'el ' + fechaCorta(DIA)) + '. Tocá ⋮ → Cambiar de camión.') + '</p>'; return; }
     var hechos = lista.filter(function (c) { return c.vis; }), pend = lista.filter(function (c) { return !c.vis; });
+    var usarOpt = st.filtro === 'pend' && st.opt && st.verOpt;
+    if (usarOpt) pend = ordenOptimo(pend);
     var ver = st.filtro === 'pend' ? pend : hechos.slice().sort(function (a, b) { return (b.vis.tLocal || 0) - (a.vis.tLocal || 0); });
     var h = '<div class="avance"><div><b>' + hechos.length + '</b> de ' + lista.length + ' visitados</div><div class="medidor"><i style="width:' + (lista.length ? hechos.length / lista.length * 100 : 0) + '%"></i></div></div>' +
       '<div class="seg" role="group"><button type="button" data-f="pend" aria-pressed="' + (st.filtro === 'pend') + '">Pendientes <i>' + pend.length + '</i></button><button type="button" data-f="vis" aria-pressed="' + (st.filtro === 'vis') + '">Visitados <i>' + hechos.length + '</i></button></div>';
+    if (st.filtro === 'pend' && pend.length) h += panelOptimo(pend);
     if (!ver.length) h += '<p class="vacio">' + (st.filtro === 'pend' ? (lista.length ? '¡No quedan clientes pendientes! Cuando termines, tocá ⋮ → Cerrar jornada.' : 'La hoja de ruta no tiene clientes.') : 'Todavía no cargaste visitas.') + '</p>';
-    h += '<ul class="clientes">' + ver.map(function (c) {
-      var vis = c.vis;
-      return '<li><button type="button" class="cli' + (vis ? ' hecho ' + vis.estado : '') + '" data-cod="' + esc(c.codigo) + '">' +
-        '<span class="n">' + (vis ? (vis.estado === 'modulado' ? '✕' : '✓') : (c.n || '·')) + '</span>' +
+    h += '<ul class="clientes">' + ver.map(function (c, i) {
+      var vis = c.vis, ll = usarOpt && st.opt.res.llegadas[c.codigo];
+      return '<li><button type="button" class="cli' + (vis ? ' hecho ' + vis.estado : '') + (usarOpt && i === 0 ? ' prox' : '') + '" data-cod="' + esc(c.codigo) + '">' +
+        '<span class="n' + (usarOpt ? ' opt' : '') + '">' + (vis ? (vis.estado === 'modulado' ? '✕' : '✓') : usarOpt ? i + 1 : (c.n || '·')) + '</span>' +
         '<span class="cli-txt"><b>' + esc(c.nombre) + '</b><span>' + esc(c.domicilio || '') + (c.localidad ? ', ' + esc(c.localidad) : '') + '</span>' +
         (vis ? '<span class="cli-est">' + TXT_EST[vis.estado] + (vis.motivo ? ': ' + esc(vis.motivo) : '') + ' · ' + hhmm(vis.tLocal) + (st.local[c.codigo] ? ' · sin enviar' : '') + '</span>'
-          : '<span class="cli-ven">' + esc(c.ventana || 'Sin ventana') + '</span>') +
+          : '<span class="cli-ven">' + esc(c.ventana || 'Sin ventana') + '</span>' + (usarOpt ? lineaLlegada(c, ll) : '')) +
         '</span><span class="cod">' + esc(c.codigo) + '</span></button></li>';
     }).join('') + '</ul>';
     v.innerHTML = h;
     Array.prototype.forEach.call(v.querySelectorAll('.seg button'), function (b) { b.onclick = function () { st.filtro = b.getAttribute('data-f'); pintarClientes(); }; });
     Array.prototype.forEach.call(v.querySelectorAll('.cli'), function (b) { b.onclick = function () { fichaCliente(b.getAttribute('data-cod')); }; });
+    var bo = document.getElementById('b-opt'); if (bo) bo.onclick = calcularOptimo;
+    var bv = document.getElementById('b-opt-ver'); if (bv) bv.onclick = function () { st.verOpt = !st.verOpt; pintarClientes(); pintarMapa(); };
+  }
+
+  // ---------- ruta óptima ----------
+  function minDe(t) { var d = new Date(t); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; }
+  function hm(m) { m = Math.round(m); var h = Math.floor(m / 60) % 24; return ('0' + h).slice(-2) + ':' + ('0' + (m % 60)).slice(-2); }
+  function ordenOptimo(pend) {
+    var pos = {};
+    st.opt.res.orden.forEach(function (cod, i) { pos[cod] = i; });
+    return pend.slice().sort(function (a, b) {
+      var pa = pos[a.codigo], pb = pos[b.codigo];
+      return (pa == null ? 1e4 + (a.n || 0) : pa) - (pb == null ? 1e4 + (b.n || 0) : pb);
+    });
+  }
+  // Minutos por cliente: mediana entre visitas seguidas de hoy (entre 4 y 40 min); si no hay, 10.
+  function servicioMin() {
+    var t = clientes().filter(function (c) { return c.vis && c.vis.tLocal; }).map(function (c) { return c.vis.tLocal; }).sort();
+    var d = [];
+    for (var i = 1; i < t.length; i++) { var m = (t[i] - t[i - 1]) / 6e4; if (m >= 2 && m <= 60) d.push(m); }
+    if (d.length < 3) return 10;
+    d.sort(function (a, b) { return a - b; });
+    return Math.max(4, Math.min(40, Math.round(d[Math.floor(d.length / 2)])));
+  }
+  function horaSalida() {
+    if (DIA === HOY) return minDe(Date.now());
+    var p = DIA.split('-'), d = new Date(+p[0], +p[1] - 1, +p[2]);
+    return d.getDay() === 6 ? 8 * 60 : 7 * 60 + 30; // otro día: desde la apertura de ruta
+  }
+  function ubicacion() {
+    if (st.gps.ll && Date.now() - (st.gps.t || 0) < 5 * 6e4) return Promise.resolve(st.gps.ll);
+    return new Promise(function (ok, mal) {
+      if (!('geolocation' in navigator)) return mal(new Error('Este celular no tiene GPS disponible.'));
+      navigator.geolocation.getCurrentPosition(function (p) { ok([p.coords.latitude, p.coords.longitude]); },
+        function (e) { mal(new Error(e.code === 1 ? 'Sin permiso de ubicación: activalo para esta página.' : 'No se pudo obtener tu ubicación.')); },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 });
+    });
+  }
+  function calcularOptimo() {
+    if (st.calculando || !window.LTOptimo) return;
+    var pend = clientes().filter(function (c) { return !c.vis; });
+    if (!pend.length) return;
+    st.calculando = true; pintarClientes();
+    var origen = null, servicio = servicioMin(), t0 = horaSalida();
+    ubicacion().then(function (ll) {
+      origen = ll;
+      return LTOptimo.calcular(origen, pend.map(function (c) { return { codigo: c.codigo, ll: c.ll, ventana: c.ventana, n: c.n }; }), t0, servicio);
+    }).then(function (res) {
+      st.opt = { dia: DIA, pat: st.pat, uid: fb.sesion().uid, at: Date.now(), origen: origen, res: res, g: null };
+      st.verOpt = true;
+      guardar('ldAppOptimo', st.opt);
+      // El Tablero la usa para ordenar los pendientes y medir el cumplimiento.
+      fb.encolar('post', 'dias/' + DIA + '/optimo/' + st.pat, {
+        orden: res.orden, km: Math.round(res.km * 10) / 10, fin: Math.round(res.fin), nTarde: res.nTarde, servicio: res.servicio, fuente: res.fuente,
+        tLocal: st.opt.at, t: fb.AHORA, uid: fb.sesion().uid, usuario: fb.sesion().usuario,
+      });
+      avisar('Ruta óptima calculada' + (res.fuente === 'osrm' ? '.' : ' (sin conexión con el mapa de calles: distancias aproximadas).'));
+      trazarOptimo();
+    }, function (e) { avisar(e.message, true); }).then(function () { st.calculando = false; pintarClientes(); pintarMapa(); });
+  }
+  // Trazado por calles de la ruta óptima, para el mapa (si falla, se dibuja en línea recta).
+  function trazarOptimo() {
+    var o = st.opt, r = ruta();
+    if (!o || !r) return;
+    var pts = [o.origen].concat(o.res.orden.map(function (cod) { return r.clientes[cod] && r.clientes[cod].ll; }).filter(Boolean));
+    if (pts.length < 2 || pts.length > 100) return;
+    var url = 'https://router.project-osrm.org/route/v1/driving/' + pts.map(function (p) { return (+p[1]).toFixed(6) + ',' + (+p[0]).toFixed(6); }).join(';') + '?overview=full&geometries=geojson';
+    fetch(url).then(function (x) { return x.ok ? x.json() : null; }).then(function (j) {
+      if (!j || j.code !== 'Ok' || st.opt !== o) return;
+      o.g = j.routes[0].geometry.coordinates.map(function (c) { return [Math.round(c[1] * 1e5) / 1e5, Math.round(c[0] * 1e5) / 1e5]; });
+      guardar('ldAppOptimo', o);
+      pintarMapa();
+    }).catch(function () {});
+  }
+  function panelOptimo(pend) {
+    if (st.calculando) return '<div class="opt"><p class="opt-tit">Calculando la ruta óptima…</p><p class="opt-sub">Buscando tu ubicación y las distancias por calle.</p></div>';
+    if (!st.opt) return '<div class="opt"><button type="button" class="btn prim ancho" id="b-opt">Calcular ruta óptima</button>' +
+      '<p class="opt-sub">Ordena los ' + pend.length + ' pendientes desde donde estás, respetando las ventanas de entrega.</p></div>';
+    var o = st.opt, r = o.res, nuevos = pend.filter(function (c) { return !r.llegadas[c.codigo] && r.sinUbicacion.indexOf(c.codigo) < 0; }).length;
+    var min = Math.round((Date.now() - o.at) / 6e4);
+    var viejo = min > 45 || nuevos;
+    var tarde = pend.filter(function (c) { var x = r.llegadas[c.codigo]; return x && x.est === 'tarde'; }).length;
+    var venc = pend.filter(function (c) { var x = r.llegadas[c.codigo]; return x && x.est === 'vencida'; }).length;
+    var h = '<div class="opt' + (viejo ? ' viejo' : '') + '"><p class="opt-tit">' + (st.verOpt ? 'Orden: ruta óptima' : 'Orden: hoja de ruta') + '</p>' +
+      '<p class="opt-sub">Calculada a las ' + hhmm(o.at) + (min >= 1 ? ' (hace ' + (min < 60 ? min + ' min' : Math.floor(min / 60) + ' h ' + (min % 60) + ' min') + ')' : '') +
+      ' · ~' + r.km.toFixed(1).replace('.', ',') + ' km · termina ~' + hm(r.fin) + ' · ' + r.servicio + ' min por cliente' +
+      (tarde ? ' · <b class="mal">' + tarde + ' fuera de ventana</b>' : venc ? '' : ' · todos en ventana') +
+      (venc ? ' · ' + venc + (venc === 1 ? ' con la ventana ya vencida' : ' con la ventana ya vencida') : '') + '</p>';
+    if (r.hoja && r.hoja.nTarde > r.nTarde) h += '<p class="opt-sub">Con el orden de la hoja de ruta quedaban ' + r.hoja.nTarde + ' fuera de ventana.</p>';
+    if (r.sinUbicacion.length) h += '<p class="opt-sub">' + r.sinUbicacion.length + (r.sinUbicacion.length === 1 ? ' cliente no tiene ubicación y va al final.' : ' clientes no tienen ubicación y van al final.') + '</p>';
+    if (viejo) h += '<p class="opt-sub mal">' + (nuevos ? 'Hay clientes nuevos en la hoja de ruta. ' : '') + 'Conviene recalcular.</p>';
+    return h + '<div class="opt-acc"><button type="button" class="btn sec" id="b-opt">Recalcular desde acá</button><button type="button" class="btn sec" id="b-opt-ver">' + (st.verOpt ? 'Ver orden de la hoja' : 'Ver ruta óptima') + '</button></div></div>';
+  }
+  function lineaLlegada(c, x) {
+    if (!x) return '<span class="cli-eta">' + (c.ll ? 'Fuera del cálculo: tocá Recalcular' : 'Sin ubicación') + '</span>';
+    var t = 'Llega ~' + hm(x.llega);
+    if (x.est === 'espera') return '<span class="cli-eta medio">' + t + ' · abre ' + hm(x.inicio) + ', esperar ' + Math.round(x.inicio - x.llega) + ' min</span>';
+    if (x.est === 'vencida') return '<span class="cli-eta mal">' + t + ' · ventana vencida' + (x.cierre ? ' (cerró ' + hm(x.cierre) + ')' : '') + '</span>';
+    if (x.est === 'tarde') return '<span class="cli-eta mal">' + t + ' · fuera de ventana (+' + x.atraso + ' min)</span>';
+    return '<span class="cli-eta bien">' + t + (x.est === 'ok' ? ' · en ventana' : '') + '</span>';
   }
   function importeTxt(n) { return '$ ' + Math.round(+n || 0).toLocaleString('es-AR'); }
   function fichaCliente(cod) {
@@ -421,11 +527,17 @@
       encuadrado = false;
     }
     capaCli.clearLayers();
-    var pts = [];
+    var pts = [], usarOpt = st.opt && st.verOpt, numOpt = {};
+    if (usarOpt) {
+      ordenOptimo(clientes().filter(function (c) { return !c.vis; })).forEach(function (c, i) { numOpt[c.codigo] = i + 1; });
+      var r0 = ruta(), linea = st.opt.g || [st.opt.origen].concat(st.opt.res.orden.map(function (cod) { return r0 && r0.clientes[cod] && r0.clientes[cod].ll; }).filter(Boolean));
+      L.polyline(linea, { color: '#fff', weight: 7, opacity: 0.9, interactive: false }).addTo(capaCli);
+      L.polyline(linea, { color: '#F07F1D', weight: 4, opacity: 0.95, dashArray: st.opt.g ? null : '6 8', interactive: false }).addTo(capaCli);
+    }
     clientes().forEach(function (c) {
       if (!c.ll) return;
       var vis = c.vis, html, tam, anc;
-      if (!vis) { html = '<i class="mk mk-pend"><b>' + (c.n || '') + '</b></i>'; tam = [30, 38]; anc = [15, 37]; }
+      if (!vis) { html = '<i class="mk mk-pend' + (usarOpt ? ' mk-opt' : '') + '"><b>' + (usarOpt ? numOpt[c.codigo] || '' : c.n || '') + '</b></i>'; tam = [30, 38]; anc = [15, 37]; }
       else { html = '<i class="mk mk-' + (vis.estado === 'modulado' ? 'no' : 'ok') + '">' + (vis.estado === 'modulado' ? '✕' : '✓') + '</i>'; tam = [24, 24]; anc = [12, 12]; }
       var m = L.marker(c.ll, { icon: L.divIcon({ className: 'mk-env', html: html, iconSize: tam, iconAnchor: anc }), zIndexOffset: vis ? 0 : 500, title: c.nombre });
       m.on('click', function () { fichaCliente(c.codigo); });

@@ -343,6 +343,7 @@
       c.noEntApp = !!(x && x.fuente === 'app' && /^RECHAZ/.test(x.estado) && !c.rechazado);
       c.horaNb = x && x.hora ? x.hora : null;
       c.seq = x && x.seq != null ? x.seq : null;
+      c.optPos = x && x.optPos ? x.optPos : null;
       c.est = c.rechazado ? 'rechazado' : c.parcial ? 'parcial' : c.entregado ? 'entregado' : '';
       var s = x && estadoNextbyn(x.estado);
       if (s === 'rechazado' || s === 'parcial') c.est = s;
@@ -612,7 +613,7 @@
     if (dc) return cruzar(dc, nbCli);
     return Object.keys(nbCli).map(function (id) {
       var x = nbCli[id];
-      return { codigo: id.indexOf('N:') ? id : '', cliente: (id.indexOf('N:') ? id + ' - ' : '') + x.nombre, domicilio: x.domicilio, nbEstado: x.estado, motivos: x.motivo ? [x.motivo] : [], horaNb: x.hora || null, seq: x.seq != null ? x.seq : null, leidoNextbyn: true, est: estadoNextbyn(x.estado) };
+      return { codigo: id.indexOf('N:') ? id : '', cliente: (id.indexOf('N:') ? id + ' - ' : '') + x.nombre, domicilio: x.domicilio, nbEstado: x.estado, motivos: x.motivo ? [x.motivo] : [], horaNb: x.hora || null, seq: x.seq != null ? x.seq : null, optPos: x.optPos || null, leidoNextbyn: true, est: estadoNextbyn(x.estado) };
     });
   }
   function pct(a, b) { return b ? Math.round((a / b) * 100) + '%' : '—'; }
@@ -649,6 +650,27 @@
     if (!p || (!p.riesgo && !p.justo && !Object.keys(p.porCli).length)) return '';
     var fuente = nb && nb.fuente === 'app' ? 'orden de la hoja de ruta publicada para la app' : nb && nb.cli && nb.cli.colSeq ? 'columna ' + nb.cli.colSeq + ' de Nextbyn' : 'orden de la lista de Clientes de Nextbyn';
     return '<span class="ot-res" title="' + esc('Secuencia: ' + fuente + '. Tiempo por cliente: ' + Math.round(p.m) + ' min (últimas entregas de hoy o ritmo del camión).') + '">En riesgo <b>' + p.riesgo + '</b> <small>' + (p.justo ? p.justo + ' justos, ' : '') + Math.round(p.m) + ' min por cliente</small></span>';
+  }
+  // ---------- ruta óptima de la app: orden de los pendientes y cumplimiento ----------
+  function optDe(pat) {
+    var cam = nb && nb.cams && nb.cams.filter(function (x) { return String(x.patente).toUpperCase() === pat; })[0];
+    return cam && cam.optimo ? cam.optimo : null;
+  }
+  function posOptimo(c) { return !c.est && c.optPos ? '<span class="opt-pos" title="Orden en la ruta óptima que calculó la app">' + c.optPos + '.º en ruta óptima</span>' : ''; }
+  function nivelCump(o) { return !o.n ? '' : o.ok / o.n >= 0.85 ? 'bien' : o.ok / o.n >= 0.65 ? 'medio' : 'mal'; }
+  function resumenOptimo(pat) {
+    if (!modoApp()) return '';
+    var o = optDe(pat);
+    if (!o) return '<span class="ot-res opt-res" title="El chofer todavía no calculó la ruta óptima en la app">Ruta óptima <small>sin calcular</small></span>';
+    var c = o.cump;
+    return '<span class="ot-res opt-res ' + nivelCump(c) + '" title="Visitas hechas en el orden de la ruta óptima, desde que se calculó. Saltear un cliente cuenta una vez.' + (c.fuera.length ? ' Fuera de orden: ' + esc(c.fuera.join(', ')) : '') + '">' +
+      'Cumplimiento ruta óptima <b>' + pct(c.ok, c.n) + '</b> <small>' + c.ok + ' de ' + c.n + ' visitas en orden · calculada ' + hhmm(o.at) + (o.planes > 1 ? ' (' + o.planes + ' veces)' : '') +
+      (o.km != null ? ' · ' + String(o.km).replace('.', ',') + ' km' : '') + '</small></span>';
+  }
+  function cumplimientoFlota() {
+    var r = { ok: 0, n: 0, cam: 0, con: 0 };
+    ((nb && nb.cams) || []).forEach(function (x) { r.cam++; if (x.optimo) { r.con++; r.ok += x.optimo.cump.ok; r.n += x.optimo.cump.n; } });
+    return r;
   }
   function resumenOT(o) {
     return '<span class="ot-res" title="OT en vivo: a tiempo sobre clientes ya visitados (entregados o rechazados; no cuenta los entregados sin hora)">OT en vivo <b>' + pct(o.ok, o.visitados) + '</b> <small>' + o.ok + ' de ' + o.visitados + ' visitados</small></span>' +
@@ -717,9 +739,9 @@
       if (!ids.length) return '<div class="dres">' + msg + '</div>';
       var lista = listaClientes(pat);
       ordenarClientes(pat, lista, ahora);
-      return '<div class="dres"><span>' + msg + '</span><span>Clientes <b>' + lista.length + '</b></span><span>Entregados <b>' + lista.filter(function (c) { return c.est === 'entregado'; }).length + '</b></span>' + resumenOT(otDeCamion(pat, ahora)) + resumenRiesgo(pat, ahora) + avisoOT() + '</div>' +
+      return '<div class="dres"><span>' + msg + '</span><span>Clientes <b>' + lista.length + '</b></span><span>Entregados <b>' + lista.filter(function (c) { return c.est === 'entregado'; }).length + '</b></span>' + resumenOT(otDeCamion(pat, ahora)) + resumenOptimo(pat) + resumenRiesgo(pat, ahora) + avisoOT() + '</div>' +
         '<div class="tabla-cli"><table class="cli"><thead><tr><th>Estado</th><th>Cliente</th><th class="h-ot">Ventana y entrega</th><th class="h-pago">Pago pendiente</th><th class="h-dom">Domicilio</th></tr></thead><tbody>' +
-        lista.map(function (c) { var r = evaluarOT(pat, c, ahora); return '<tr><td>' + pillEstado(c) + '</td><td><b>' + esc(c.cliente) + '</b>' + notaVentana(r) + '</td><td class="h-ot">' + lineaCliente(r, E, ahora) + '</td><td class="h-pago">' + pillPago(c) + '</td><td class="h-dom">' + esc(c.domicilio) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+        lista.map(function (c) { var r = evaluarOT(pat, c, ahora); return '<tr><td>' + pillEstado(c) + '</td><td><b>' + esc(c.cliente) + '</b>' + posOptimo(c) + notaVentana(r) + '</td><td class="h-ot">' + lineaCliente(r, E, ahora) + '</td><td class="h-pago">' + pillPago(c) + '</td><td class="h-dom">' + esc(c.domicilio) + '</td></tr>'; }).join('') + '</tbody></table></div>';
     }
 
     // Con Chess: cruza cada cliente con su estado en Nextbyn.
@@ -732,13 +754,13 @@
       '<span>Clientes <b>' + cs.length + '</b></span><span>Entregados <b>' + nEnt + '</b></span>' + (nRe ? '<span>Rechazos <b>' + nRe + '</b></span>' : '') +
       '<span>Importe <b>' + plata(dc.importe) + '</b></span><span>Bultos <b>' + Math.round(dc.bultos) + '</b></span>' +
       '<span>Cajones retornables <b>' + Math.round(dc.cajones) + '</b></span>' +
-      (hayNb ? '' : '<span>Sin estados de Nextbyn: el estado sale de Chess.</span>') + resumenOT(otDeCamion(pat, ahora)) + resumenRiesgo(pat, ahora) + avisoOT() + '</div>' +
+      (hayNb ? '' : '<span>Sin estados de Nextbyn: el estado sale de Chess.</span>') + resumenOT(otDeCamion(pat, ahora)) + resumenOptimo(pat) + resumenRiesgo(pat, ahora) + avisoOT() + '</div>' +
       '<div class="tabla-cli"><table class="cli"><thead><tr><th>Estado</th><th>Cliente</th><th class="h-ot">Ventana y entrega</th><th class="h-pago">Pago pendiente</th><th class="h-dom">Domicilio</th><th class="h-loc">Localidad</th><th class="h-comp">Comprobante</th><th class="n">Importe</th><th class="n">Bultos</th><th class="n">Cajones</th></tr></thead><tbody>';
     cs.forEach(function (c) {
       var k = pat + '|' + c.cliente, abierto = !!clientesAbiertos[k], rOT = evaluarOT(pat, c, ahora);
       h += '<tr class="cl" data-cl="' + esc(k) + '"><td>' + pillEstado(c) +
         (c.motivos && c.motivos.length ? '<span class="motivo">' + esc(c.motivos.join(', ')) + '</span>' : '') +
-        '</td><td><span class="car' + (abierto ? ' rot' : '') + '">▸</span><b>' + esc(c.cliente) + '</b>' + notaVentana(rOT) + '</td><td class="h-ot">' + lineaCliente(rOT, E, ahora) + '</td><td class="h-pago">' + pillPago(c) + '</td><td class="h-dom">' + esc(c.domicilio) + '</td><td class="h-loc">' + esc(c.localidad) +
+        '</td><td><span class="car' + (abierto ? ' rot' : '') + '">▸</span><b>' + esc(c.cliente) + '</b>' + posOptimo(c) + notaVentana(rOT) + '</td><td class="h-ot">' + lineaCliente(rOT, E, ahora) + '</td><td class="h-pago">' + pillPago(c) + '</td><td class="h-dom">' + esc(c.domicilio) + '</td><td class="h-loc">' + esc(c.localidad) +
         '</td><td class="h-comp" style="font-size:13px">' + esc(c.comprobantes.join(', ')) + '</td><td class="n">' + plata(c.importe) + '</td><td class="n">' + num(c.bultos) + '</td><td class="n">' + num(c.cajones) + '</td></tr>';
       if (abierto) {
         h += '<tr class="prod"><td colspan="10">' + detalleProductos(c) + '</td></tr>';
@@ -828,7 +850,12 @@
       '<div class="grupo g-avance"><h2>Avance</h2>' +
       '<p class="dato"><b>' + avance + '%</b> <span>' + tot.h + ' de ' + tot.t + ' clientes visitados</span></p>' +
       '<div class="medidor"><i style="width:' + avance + '%"></i></div>' +
-      '<p class="pie">Faltan ' + Math.max(0, tot.t - tot.h) + ' clientes</p></div>' +
+      '<p class="pie">Faltan ' + Math.max(0, tot.t - tot.h) + ' clientes</p>' +
+      (modoApp() ? (function () {
+        var f = cumplimientoFlota();
+        return '<p class="pie opt-flota ' + nivelCump(f) + '" title="Visitas hechas en el orden de la ruta óptima calculada en la app, sobre las visitas hechas después de calcularla">Cumplimiento ruta óptima <b>' + pct(f.ok, f.n) + '</b> ' +
+          (f.n ? f.ok + ' de ' + f.n + ' visitas en orden' : 'sin visitas con ruta óptima') + ' · ' + f.con + ' de ' + f.cam + ' camiones la calcularon</p>';
+      })() : '') + '</div>' +
       // OT
       '<div class="grupo g-ot"><h2>Entregas en ventana (OT)</h2><div class="dos">' +
       '<p class="dato ' + nivel(otV) + '" title="A tiempo sobre clientes ya visitados (entregados o rechazados)"><b>' + pct(otF.ok, otF.vis) + '</b> <span>en vivo<br>' + otF.ok + ' de ' + otF.vis + ' visitados</span></p>' +

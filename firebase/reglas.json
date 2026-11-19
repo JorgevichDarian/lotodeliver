@@ -20,7 +20,8 @@
         "visitas": { "$pat": { ".write": "auth != null && root.child('usuarios').child(auth.uid).exists()" } },
         "sesiones": { "$pat": { ".write": "auth != null && root.child('usuarios').child(auth.uid).exists()" } },
         "gps": { "$pat": { ".write": "auth != null && root.child('usuarios').child(auth.uid).exists()" } },
-        "trazas": { "$pat": { ".write": "auth != null && root.child('usuarios').child(auth.uid).exists()" } }
+        "trazas": { "$pat": { ".write": "auth != null && root.child('usuarios').child(auth.uid).exists()" } },
+        "optimo": { "$pat": { ".write": "auth != null && root.child('usuarios').child(auth.uid).exists()" } }
       }
     },
 

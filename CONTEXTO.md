@@ -28,6 +28,11 @@ Este archivo sirve para retomar el proyecto en un chat nuevo: adjuntalo o pedile
 - App: el chofer elige el día de entrega en la pantalla de camiones (por defecto hoy). En otro día no manda GPS.
 - Tablero: selector "Día de entrega" en el encabezado (por defecto hoy; la elección vale hasta que cambia el día). Pide a Chess ese día (`leerChess({fecha})`, busca planillas hasta 4 días antes con `fecentrecbt` = ese día), publica la hoja de ruta en `dias/{día}/rutas` y lee visitas/sesiones/GPS de ese día. Nextbyn y el guardado del Histórico solo funcionan con hoy. Día futuro: análisis a la hora de apertura; día pasado: a las 23:59.
 
+## Ruta óptima en la app (1.3.0)
+- `app/optimo.js`: ordena los pendientes desde la ubicación actual. Matriz de tiempos/distancias de OSRM (`/table`, ×1,25 por camión; si falla, línea recta ×1,35 a 25 km/h). Costo = hora de fin + 20×min fuera de ventana + 240 por cliente fuera. Partidas: vecino más cercano, urgente, por cierre, inserción, orden de la hoja; mejora con Or-opt (1–3) y 2-opt. Ventanas que ya no se pueden cumplir se ignoran y se marcan "vencida". Tiempo por cliente: mediana entre visitas de hoy (4–40 min) o 10.
+- Se guarda en el celular (`ldAppOptimo`) y cada cálculo se sube a `dias/{día}/optimo/{PATENTE}/{id}` (orden, km, fin, tLocal). El mapa de la app dibuja la ruta con OSRM `/route`.
+- Tablero (1.4.0): pendientes en el orden de la última ruta óptima ("N.º en ruta óptima", también para la proyección de riesgo); entregados como antes. **Cumplimiento de ruta óptima** por camión y de la flota: visitas hechas al cliente que seguía en el plan vigente (el próximo no visitado después del último visitado con ese plan; saltear cuenta una vez) sobre visitas hechas después de calcularlo. Requiere la regla `dias/$dia/optimo/$pat` en Firebase.
+
 ## Estructura
 - `extension/`: extensión MV3 y el tablero (se publica igual en `docs/`).
   - `bg.js` (service worker: lee Chess y hojas de Google con la sesión del usuario), `lectores.js` (lectores inyectados en Chess/Nextbyn), `base-clientes.js` (base de clientes diaria desde Chess).

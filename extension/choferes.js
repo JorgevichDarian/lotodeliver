@@ -12,7 +12,7 @@
   var cfg = leer(CLAVE, { fuente: 'app' });
   var DIA = window.LTFirebase ? LTFirebase.dia() : '';
   var sigueHoy = true; // false cuando el Tablero eligió otro día de entrega
-  var st = { perfil: null, rutas: null, visitas: {}, sesiones: {}, gps: {}, desc: {}, descViejos: {}, usuarios: null, error: '', at: null, pub: leer('ldTabPublicado', {}) };
+  var st = { perfil: null, rutas: null, visitas: {}, sesiones: {}, gps: {}, optimo: {}, desc: {}, descViejos: {}, usuarios: null, error: '', at: null, pub: leer('ldTabPublicado', {}) };
   var oyentes = [], timer = null, raiz = null, publicando = false;
 
   function leer(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
@@ -41,6 +41,7 @@
     oyentes = [
       fb.escuchar(d + 'visitas', function (v) { st.visitas = v || {}; avisarCambio(); }, err),
       fb.escuchar(d + 'sesiones', function (v) { st.sesiones = v || {}; avisarCambio(); }, err),
+      fb.escuchar(d + 'optimo', function (v) { st.optimo = v || {}; avisarCambio(); }, err),
       fb.escuchar(d + 'gps', function (v) { st.gps = v || {}; if (api.alGps) api.alGps(); pintarCamiones(); }, err),
       fb.escuchar('descuentos', function (v) { st.desc = v || {}; pintarBadge(); pintarDescuentos(); }, err, '&orderBy=' + encodeURIComponent('"dia"') + '&equalTo=' + encodeURIComponent('"' + DIA + '"')),
     ];
@@ -66,6 +67,38 @@
     }, function () {});
   }
 
+  // ---------- ruta óptima (calculada en la app) ----------
+  // Planes del camión en orden de cálculo: [{ tLocal, orden: [códigos], km, fin, … }].
+  function planes(pat) {
+    var x = st.optimo[pat] || {};
+    return Object.keys(x).map(function (k) { return x[k]; }).filter(function (p) { return p && p.orden && p.orden.length && p.tLocal; })
+      .sort(function (a, b) { return a.tLocal - b.tLocal; });
+  }
+  // Cumplimiento: de las visitas hechas después de calcular una ruta óptima, cuántas fueron al cliente
+  // que seguía en esa ruta. "El que seguía" = el próximo no visitado después del último visitado con
+  // ese mismo plan (así saltear un cliente cuenta una sola vez, no corre toda la secuencia).
+  function cumplimiento(pat, vis) {
+    var P = planes(pat), r = { ok: 0, n: 0, fuera: [] };
+    if (!P.length) return r;
+    var hechas = Object.keys(vis).map(function (cod) { return { cod: cod, t: vis[cod].tLocal || 0 }; }).filter(function (v) { return v.t; })
+      .sort(function (a, b) { return a.t - b.t; });
+    var visto = {}, prevPlan = null, prev = null;
+    hechas.forEach(function (v) {
+      var plan = null;
+      for (var i = P.length - 1; i >= 0; i--) if (P[i].tLocal <= v.t) { plan = P[i]; break; }
+      if (plan && plan.orden.indexOf(v.cod) >= 0) {
+        if (plan !== prevPlan) prev = null;
+        var o = plan.orden, desde = prev ? o.indexOf(prev) + 1 : 0, esperado = null;
+        for (var j = 0; j < o.length && !esperado; j++) { var c = o[(desde + j) % o.length]; if (!visto[c]) esperado = c; }
+        r.n++;
+        if (esperado === v.cod) r.ok++; else r.fuera.push(v.cod);
+        prev = v.cod; prevPlan = plan;
+      }
+      visto[v.cod] = 1;
+    });
+    return r;
+  }
+
   // ---------- datos para el Tablero (mismo formato que Nextbyn) ----------
   function datosNb() {
     if (!st.rutas) return null;
@@ -73,12 +106,21 @@
     Object.keys(st.rutas).sort().forEach(function (pat) {
       var r = st.rutas[pat], s = st.sesiones[pat], vis = st.visitas[pat] || {}, cli = {};
       var c = { e: 0, p: 0, r: 0, pend: 0 };
+      // Pendientes en el orden de la última ruta óptima (los que no están en ella, después, en el orden de la hoja).
+      var P = planes(pat), ult = P.length ? P[P.length - 1] : null, posOpt = {};
+      if (ult) {
+        var pendOrd = Object.keys(r.clientes || {}).filter(function (cod) { return !vis[cod]; }).sort(function (a, b) {
+          var pa = ult.orden.indexOf(a), pb = ult.orden.indexOf(b);
+          return (pa < 0 ? 1e4 + (r.clientes[a].n || 0) : pa) - (pb < 0 ? 1e4 + (r.clientes[b].n || 0) : pb);
+        });
+        pendOrd.forEach(function (cod, i) { posOpt[cod] = i + 1; });
+      }
       Object.keys(r.clientes || {}).forEach(function (cod) {
         var x = r.clientes[cod], v = vis[cod];
         var est = !v ? '' : v.estado === 'entregado' ? 'ENTREGADO' : v.estado === 'parcial' ? 'ENTREGA PARCIAL' : 'RECHAZADO';
         if (!v) c.pend++; else if (v.estado === 'entregado') c.e++; else if (v.estado === 'parcial') c.p++; else c.r++;
         cli[cod] = {
-          nombre: x.nombre, domicilio: x.domicilio, estado: est, hora: v ? v.tLocal || v.t : null, seq: x.n,
+          nombre: x.nombre, domicilio: x.domicilio, estado: est, hora: v ? v.tLocal || v.t : null, seq: posOpt[cod] || x.n, optPos: posOpt[cod] || null,
           motivo: v ? [v.motivo, v.nota].filter(Boolean).join(': ') : '', fuente: 'app',
         };
         n++;
@@ -88,6 +130,7 @@
         patente: pat, estado: !s ? 'SIN INICIAR' : s.fin ? 'CERRADA' : 'ABIERTA',
         vehiculo: s ? 'App: ' + (s.nombre || s.usuario) : 'Sin chofer en la app', inicio: s && s.inicio ? s.inicio : null,
         entregados: c.e, parciales: c.p, rechazos: c.r, pendientes: c.pend, hechos: c.e + c.p + c.r, total: c.e + c.p + c.r + c.pend, pct: null,
+        optimo: ult ? { cump: cumplimiento(pat, vis), at: ult.tLocal, km: ult.km, fin: ult.fin, nTarde: ult.nTarde, planes: P.length } : null,
       });
     });
     return { cams: cams, cli: { n: n, p: p, campos: [], colHora: 'app', colSeq: '' }, at: st.at || Date.now(), fuente: 'app' };
@@ -284,7 +327,7 @@
       if (!window.LTFirebase || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
       sigueHoy = d === LTFirebase.dia();
       if (d === DIA) return;
-      DIA = d; st.rutas = null; st.visitas = {}; st.sesiones = {}; st.gps = {}; st.desc = {};
+      DIA = d; st.rutas = null; st.visitas = {}; st.sesiones = {}; st.gps = {}; st.desc = {}; st.optimo = {};
       if (fb && fb.sesion() && st.perfil) escuchar(); else pintar();
       if (api.alCambiar) api.alCambiar();
     },
