@@ -8,7 +8,10 @@
   'use strict';
   var $app = document.getElementById('app'), $hoja = document.getElementById('hoja'), $aviso = document.getElementById('aviso');
   var fb = window.LTFirebase && LTFirebase.crear(window.LT_FIREBASE, { prefijo: 'ldApp' });
-  var DIA = window.LTFirebase ? LTFirebase.dia() : '';
+  // Día de entrega: por defecto hoy; el chofer puede elegir otro en la pantalla de camiones.
+  var HOY = window.LTFirebase ? LTFirebase.dia() : '', DIA = HOY;
+  function fechaCorta(d) { var x = String(d).split('-'); return x[2] + '/' + x[1]; }
+  function delDia() { return DIA === HOY ? 'de hoy' : 'del ' + fechaCorta(DIA); }
 
   var MOTIVOS_NO = ['Cerrado', 'Sin dinero', 'Rechaza la mercadería', 'No hizo pedido', 'No se encontró la dirección', 'Otro'];
   var MOTIVOS_DESC = ['Producto vencido o dañado', 'Precio mal facturado', 'Faltante de mercadería', 'Acuerdo comercial', 'Otro'];
@@ -95,7 +98,8 @@
   }
   function continuar() {
     var g = leer('ldAppCamion', null);
-    if (g && g.dia === DIA && g.uid === fb.sesion().uid) st.pat = g.pat;
+    HOY = LTFirebase.dia();
+    if (g && g.uid === fb.sesion().uid && (g.en || g.dia) === HOY) { st.pat = g.pat; DIA = g.dia; } else DIA = HOY;
     escucharDia();
     if (st.pat) pantallaRuta(); else pantallaCamion();
   }
@@ -127,10 +131,14 @@
   function pantallaCamion() {
     if (st.pat) return;
     var rutas = st.rutas, nombre = st.perfil ? st.perfil.nombre : '';
-    var h = '<header class="barra"><div><p class="hola">Hola, ' + esc(nombre || fb.sesion().usuario) + '</p><h1>¿Qué camión manejás hoy?</h1></div>' +
-      '<button type="button" class="icono-btn" id="b-salir" aria-label="Salir">Salir</button></header><main class="lista-camiones">';
-    if (rutas === null) h += '<p class="vacio">Buscando la hoja de ruta de hoy…</p>';
-    else if (!Object.keys(rutas).length) h += '<p class="vacio">Todavía no se cargó la hoja de ruta de hoy. Avisale al modulador; esta pantalla se actualiza sola.</p>';
+    var h = '<header class="barra"><div><p class="hola">Hola, ' + esc(nombre || fb.sesion().usuario) + '</p><h1>¿Qué camión manejás' + (DIA === HOY ? ' hoy' : '') + '?</h1></div>' +
+      '<button type="button" class="icono-btn" id="b-salir" aria-label="Salir">Salir</button></header>' +
+      '<div class="elegir-dia"><label for="f-dia">Día de entrega</label><input type="date" id="f-dia" value="' + esc(DIA) + '">' +
+      (DIA !== HOY ? '<button type="button" class="btn sec" id="b-hoy">Hoy</button>' : '') + '</div>' +
+      (DIA !== HOY ? '<p class="aviso-dia">Estás viendo la hoja de ruta del ' + fechaCorta(DIA) + '. Lo que marques queda registrado en ese día. El GPS solo se manda en las rutas de hoy.</p>' : '') +
+      '<main class="lista-camiones">';
+    if (rutas === null) h += '<p class="vacio">Buscando la hoja de ruta ' + delDia() + '…</p>';
+    else if (!Object.keys(rutas).length) h += '<p class="vacio">' + (DIA === HOY ? 'Todavía no se cargó la hoja de ruta de hoy. Avisale al modulador; esta pantalla se actualiza sola.' : 'No hay hoja de ruta publicada para el ' + fechaCorta(DIA) + '.') + '</p>';
     else {
       Object.keys(rutas).sort().forEach(function (pat) {
         var r = rutas[pat], s = st.sesiones[pat], n = Object.keys(r.clientes || {}).length;
@@ -143,9 +151,19 @@
     }
     $app.innerHTML = h + '</main>';
     document.getElementById('b-salir').onclick = salir;
+    document.getElementById('f-dia').onchange = function (e) { cambiarDia(e.target.value || LTFirebase.dia()); };
+    if (document.getElementById('b-hoy')) document.getElementById('b-hoy').onclick = function () { cambiarDia(LTFirebase.dia()); };
     Array.prototype.forEach.call($app.querySelectorAll('.camion'), function (b) {
       b.onclick = function () { elegirCamion(b.getAttribute('data-pat')); };
     });
+  }
+  function cambiarDia(d) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+    HOY = LTFirebase.dia();
+    if (d === DIA) return pantallaCamion();
+    DIA = d; st.rutas = null; st.sesiones = {}; st.descuentos = {};
+    pantallaCamion();
+    escucharDia();
   }
   function elegirCamion(pat) {
     var s = st.sesiones[pat];
@@ -154,7 +172,7 @@
     var ses = { uid: fb.sesion().uid, usuario: fb.sesion().usuario, nombre: st.perfil.nombre || fb.sesion().usuario, inicio: s && s.uid === fb.sesion().uid && s.inicio ? s.inicio : fb.AHORA, fin: null };
     fb.encolar('put', 'dias/' + DIA + '/sesiones/' + pat, ses);
     st.pat = pat;
-    guardar('ldAppCamion', { dia: DIA, pat: pat, uid: fb.sesion().uid });
+    guardar('ldAppCamion', { dia: DIA, pat: pat, uid: fb.sesion().uid, en: LTFirebase.dia() });
     pantallaRuta();
     consultarDia();
   }
@@ -168,7 +186,7 @@
       pintarTodo();
     }, errorOyente)];
     $app.innerHTML =
-      '<header class="barra ruta"><div class="b-izq">' + chapa(st.pat) + '<span class="b-nom">' + esc(st.perfil.nombre || fb.sesion().usuario) + '</span></div>' +
+      '<header class="barra ruta"><div class="b-izq">' + chapa(st.pat) + '<span class="b-nom">' + esc(st.perfil.nombre || fb.sesion().usuario) + '</span>' + (DIA !== HOY ? '<span class="pild medio">' + fechaCorta(DIA) + '</span>' : '') + '</div>' +
       '<div class="b-der"><span id="est-gps" class="pild"></span><span id="est-red" class="pild"></span>' +
       '<button type="button" class="icono-btn" id="b-menu" aria-haspopup="true" aria-label="Más opciones"><svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></div></header>' +
       '<section id="v-clientes" class="vista"></section>' +
@@ -177,7 +195,7 @@
       '<nav class="nav" id="nav"></nav>';
     document.getElementById('b-menu').onclick = menu;
     document.getElementById('b-centrar').onclick = function () { if (mapa && st.gps.ll) mapa.setView(st.gps.ll, 16); else if (!st.gps.ll) avisar('Todavía no hay ubicación del GPS.'); };
-    empezarGps();
+    if (DIA === HOY) empezarGps(); else st.gps = { estado: 'otro' };
     pintarTodo();
   }
   function ruta() { return (st.rutas && st.rutas[st.pat]) || null; }
@@ -197,7 +215,8 @@
     if (!g) return;
     var e = st.gps.estado;
     g.className = 'pild ' + (e === 'ok' ? 'bien' : e === 'buscando' ? 'medio' : 'mal');
-    g.textContent = e === 'ok' ? 'GPS' : e === 'buscando' ? 'GPS…' : 'Sin GPS';
+    g.textContent = e === 'ok' ? 'GPS' : e === 'buscando' ? 'GPS…' : e === 'otro' ? 'GPS solo hoy' : 'Sin GPS';
+    if (e === 'otro') g.className = 'pild';
     g.title = st.gps.error || (st.gps.acc ? 'Precisión ±' + Math.round(st.gps.acc) + ' m' : '');
     var n = fb.pendientes();
     r.className = 'pild ' + (!navigator.onLine ? 'mal' : n ? 'medio' : 'bien');
@@ -228,7 +247,7 @@
     var v = document.getElementById('v-clientes');
     if (!v) return;
     var r = ruta(), lista = clientes();
-    if (!r) { v.innerHTML = '<p class="vacio">' + (st.rutas === null ? 'Cargando la hoja de ruta…' : 'La hoja de ruta de ' + esc(st.pat) + ' no está publicada para hoy. Tocá ⋮ → Cambiar camión.') + '</p>'; return; }
+    if (!r) { v.innerHTML = '<p class="vacio">' + (st.rutas === null ? 'Cargando la hoja de ruta…' : 'La hoja de ruta de ' + esc(st.pat) + ' no está publicada para ' + (DIA === HOY ? 'hoy' : 'el ' + fechaCorta(DIA)) + '. Tocá ⋮ → Cambiar de camión.') + '</p>'; return; }
     var hechos = lista.filter(function (c) { return c.vis; }), pend = lista.filter(function (c) { return !c.vis; });
     var ver = st.filtro === 'pend' ? pend : hechos.slice().sort(function (a, b) { return (b.vis.tLocal || 0) - (a.vis.tLocal || 0); });
     var h = '<div class="avance"><div><b>' + hechos.length + '</b> de ' + lista.length + ' visitados</div><div class="medidor"><i style="width:' + (lista.length ? hechos.length / lista.length * 100 : 0) + '%"></i></div></div>' +
@@ -330,7 +349,7 @@
     lista.forEach(function (d) { d.visto = !!vistos[d.id]; });
     var pend = leer('ldAppDescLocal', []).filter(function (d) { return d.dia === DIA && !lista.some(function (x) { return x.tLocal === d.tLocal; }); });
     var h = '<button type="button" class="btn prim grande ancho" id="b-nuevo-desc">Nuevo pedido de descuento</button>';
-    if (!lista.length && !pend.length) h += '<p class="vacio">Todavía no pediste descuentos hoy. El modulador los responde desde el Tablero y la respuesta aparece acá.</p>';
+    if (!lista.length && !pend.length) h += '<p class="vacio">Todavía no pediste descuentos ' + (DIA === HOY ? 'hoy' : 'el ' + fechaCorta(DIA)) + '. El modulador los responde desde el Tablero y la respuesta aparece acá.</p>';
     h += '<ul class="descs">' + pend.concat(lista).map(function (d) {
       var est = d.id ? d.estado : 'sinenviar';
       return '<li class="desc ' + est + '"><div class="d-cab"><b>' + esc(d.nombreCliente || d.cliente) + '</b><span class="pill ' + est + '">' + { pendiente: 'Esperando respuesta', aprobado: 'Aprobado', rechazado: 'Rechazado', sinenviar: 'Sin enviar' }[est] + '</span></div>' +

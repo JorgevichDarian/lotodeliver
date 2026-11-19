@@ -166,3 +166,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--naranja)
 .aviso{position:fixed;left:50%;bottom:calc(84px + var(--seg-abajo));transform:translateX(-50%);z-index:2000;background:var(--noche);color:#fff;padding:12px 18px;border-radius:12px;font-weight:600;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.3)}
 .aviso.malo{background:var(--rojo)}
 .sub-marca{margin:2px 0 0;font-weight:600;color:var(--tinta2)!important}
+
+/* elegir el día de entrega */
+.elegir-dia{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px 0}
+.elegir-dia label{font-weight:700;font-size:15px}
+.elegir-dia input{flex:1;min-width:150px;min-height:48px;padding:8px 12px;border:1px solid #C9CED6;border-radius:10px;font:inherit;font-size:16px;background:#fff;color:inherit}
+.elegir-dia .btn{min-height:48px}
+.aviso-dia{margin:10px 14px 0;padding:10px 12px;border-radius:10px;background:#FFF3DC;color:#5A3E00;font-size:14px;line-height:1.4}
