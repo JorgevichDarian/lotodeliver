@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tablero de ruta - LoToDeliver · Logística Total</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="reporte.css">
+</head>
+<body>
+<header class="barra">
+  <div class="marca">
+    <img class="logo" src="logo-lt.png" alt="Logística Total SRL" width="39" height="46">
+    <div>
+    <span class="empresa">Logística Total SRL</span>
+    <h1>Tablero de ruta <span class="lotod">LoToDeliver</span></h1>
+    <p class="donde"><span id="hoy">CD Neuquén</span> <span class="ver">v1.0.0</span></p>
+    </div>
+  </div>
+  <div class="fuentes" aria-label="Fuentes de datos">
+    <button id="b-nb" class="fuente"><span class="luz"></span><span id="n-nb">Nextbyn</span> <span id="t-nb" class="hora">sin datos</span></button>
+    <button id="b-ch" class="fuente"><span class="luz"></span>Chess <span id="t-ch" class="hora">sin datos</span></button>
+    <button id="b-todo" class="prim">Actualizar todo</button>
+  </div>
+</header>
+<nav class="tabs" role="tablist">
+  <a href="#tablero" id="tab-tablero" role="tab">Tablero</a>
+  <a href="#mapa" id="tab-mapa" role="tab">Ver en mapa</a>
+  <a href="#choferes" id="tab-choferes" role="tab">App choferes</a>
+  <a href="#historico" id="tab-historico" role="tab">Histórico</a>
+  <a href="#guia" id="tab-guia" role="tab">Guía instalación extensión</a>
+  <div class="ajustes">
+    <label class="chk"><input type="checkbox" id="auto" checked> Actualizar cada 5 min</label>
+    <label id="l-obj">Fin objetivo<input id="obj" inputmode="numeric" maxlength="5"></label>
+    <label>Alerta sin avance<input id="sin" inputmode="numeric" maxlength="3"> min</label>
+    <button type="button" id="b-base" class="base-btn"><span class="luz"></span>Base clientes <span class="base-est">sin actualizar</span></button>
+  </div>
+</nav>
+<main id="main">
+  <p class="sub" id="sub"></p>
+  <div id="aviso"></div>
+  <div class="vacio" id="vacio">
+    <h2>Todavía no hay datos de hoy</h2>
+    <p>Tocá <b>Actualizar todo</b>. La extensión lee Nextbyn y Chess con tu sesión; si no tenés esas páginas abiertas, las abre un momento en segundo plano.</p>
+  </div>
+  <div id="contenido"></div>
+</main>
+<section id="mapa" class="mapa-vista" hidden></section>
+<section id="choferes" class="choferes-vista" hidden></section>
+<section id="historico" class="historico-vista" hidden></section>
+<section id="guia" class="guia-vista" hidden>
+<h2 class="gt">Guía de instalación de la extensión</h2>
+<p class="lead">Reporte en vivo del estado de cada camión. Los datos los trae una extensión de Chrome, que lee Nextbyn y Chess con tu propia sesión.</p>
+
+<div class="gcard"><h2>1 · Instalar la extensión (una vez por PC)</h2>
+<ol>
+<li>Descargá la extensión y descomprimila en una carpeta que no vayas a borrar (por ejemplo <code>Documentos\lotodeliver</code>):
+<div><a class="btn" href="https://jorgevichdarian.github.io/lotodeliver/lotodeliver-extension.zip" download>Descargar extensión</a></div></li>
+<li>En Chrome, abrí <code>chrome://extensions</code> (copialo y pegalo en la barra de direcciones).</li>
+<li>Arriba a la derecha, activá <b>Modo de desarrollador</b>.</li>
+<li>Tocá <b>Cargar descomprimida</b> y elegí la carpeta que descomprimiste (la que tiene el archivo <code>manifest.json</code>).</li>
+<li>Fijá la extensión: tocá el ícono de rompecabezas de Chrome y el pin al lado de <b>Tablero de ruta - LoToDeliver</b>.</li>
+</ol></div>
+
+<div class="gcard"><h2>2 · Usar el reporte</h2>
+<ol>
+<li>Entrá a <b>Nextbyn</b> y a <b>Chess</b> con tu usuario en este Chrome (alcanza con haber iniciado sesión; no hace falta dejar las pestañas abiertas).</li>
+<li>Abrí el reporte: la pestaña <a href="#tablero">Tablero</a> de esta misma página (jorgevichdarian.github.io/lotodeliver), o tocando el ícono de la extensión, que abre esta misma dirección.</li>
+<li>Botones de arriba:
+<ul>
+<li><b>Actualizar todo</b>: lee Nextbyn y Chess.</li>
+<li><b>Nextbyn</b> / <b>Chess</b>: leen solo esa fuente. Al lado figura la hora de los últimos datos. La luz verde indica que la lectura salió bien; si está en rojo, pasá el mouse por el botón para ver qué pasó.</li>
+<li><b>Actualizar cada 5 min</b>: vuelve a leer todo solo mientras el reporte esté abierto.</li>
+</ul></li>
+<li>Si no tenés Nextbyn o Chess abiertos, la extensión los abre un momento en una pestaña de fondo y la cierra al terminar. Si la tabla de clientes de Nextbyn no se carga de fondo, muestra esa pestaña un segundo y vuelve.</li>
+<li>Tocá un camión para ver sus clientes, y un cliente para ver sus productos.</li>
+<li><b>OT (entregas a tiempo)</b>: al abrir un camión, cada cliente muestra su ventana horaria (franja celeste) y la hora en que se entregó (punto verde si fue dentro de la ventana, rojo si fue fuera). Las ventanas salen de la columna "Horario Ent." de la hoja de clientes. La hora de entrega sale de la liquidación de cada camión en Chess (la misma que se ve en "Ver liquidación", columna Hora entrega). Los clientes sin ventana o con una nota en lugar de horario (por ejemplo "AVISAR") cuentan como a tiempo al entregarse. Se muestran dos números: <b>OT en vivo</b> (a tiempo sobre clientes ya visitados, entregados o rechazados) y <b>OT del día</b> (a tiempo sobre el total de pedidos del día). Los entregados aparecen al final de la lista, en el orden en que se entregaron.</li>
+<li><b>Clientes en riesgo</b>: para cada pendiente, el reporte estima la hora de llegada siguiendo la secuencia de visitas de Nextbyn y el tiempo por cliente del camión (promedio de las últimas entregas de hoy, o el ritmo desde que salió). Si la llegada estimada cae después de que cierra su ventana, el cliente aparece <b>En riesgo</b>; si llega con menos de un cliente de margen, <b>Justo</b>; si llega antes de que abra, <b>Llega antes</b>. En la línea del cliente, el círculo sin relleno marca la llegada estimada.</li>
+<li><b>Histórico</b>: la pestaña Histórico muestra el OT diario de la flota, el OT por camión y los clientes que más veces quedan fuera de ventana. La primera vez hay que configurar el guardado siguiendo los pasos de esa pestaña; después el reporte guarda solo mientras está abierto.</li>
+<li><b>Ver en mapa</b>: muestra a todos los clientes del día en el mapa, con un color por ruta. Los pendientes son pines con su número en la secuencia de visitas (borde rojo si están en riesgo de llegar fuera de ventana); los entregados llevan ✓ y los rechazados ✕. A la izquierda se prende o apaga cada ruta, se filtra por pendientes o visitados y, tocando una ruta, el mapa se acerca a sus clientes. La ubicación sale de las columnas Longitud y Latitud de la base de clientes. El switch <b>Mostrar recorrido hecho</b> une los clientes visitados de cada ruta en el orden de su hora de entrega, siguiendo las calles y el sentido de circulación (ruteador público OSRM), con flechas que marcan el sentido y los km recorridos de cada camión. Es el camino más rápido entre cada par de clientes, no el GPS del camión. Si el ruteador no responde, el tramo se dibuja en línea recta punteada.</li>
+<li><b>App de choferes</b>: reemplaza a Nextbyn. El chofer marca cada visita en el celular (entregado, entrega parcial o no entregado con el motivo) y el Tablero lo ve en vivo. La hoja de ruta (clientes, ubicación, ventana, facturas y SKU) se publica sola cada vez que el Tablero lee Chess, si entraste como modulador en la pestaña App choferes. Ahí también respondés los pedidos de descuento (aparece un aviso arriba cuando hay alguno esperando), ves qué chofer tiene cada camión y su último GPS, y das de alta usuarios. En el mapa, cada camión aparece en vivo con su patente. Si querés volver a Nextbyn, en App choferes elegí "Entregas del Tablero: Nextbyn".</li>
+<li><b>Base de clientes</b>: una vez por día, la primera vez que el reporte lee Chess desde las 6:00, la extensión exporta de Chess la base de clientes activos (lo mismo que Ventas → Clientes → Exportar, filtro ACTIVOS), estandariza "Horario Ent.", les pone 07:30 a 11:00 a las cadenas y reemplaza la hoja de clientes. Si otra PC ya la actualizó ese día, no la vuelve a bajar. El botón <b>Base clientes</b> (arriba a la derecha) muestra cuándo se actualizó y la baja de nuevo si lo tocás. Usa el mismo script de la hoja que el Histórico.</li>
+<li><b>Pago pendiente</b>: en la lista de clientes, <b>Autorizado</b> si el cliente tiene "AUTORIZADO" en la columna Comentario de la hoja de clientes o es cuenta corriente (columna Descripción Sub-línea); si no, <b>No autorizado</b>.</li>
+<li><b>Prioridad pedidos pendientes</b>: pasá el mouse por el botón de cada camión (o tocalo en el celular) para ver sus pedidos pendientes en orden de prioridad. El orden sale de la pestaña <b>PL4.2 Carga ruteo</b> del Plan de agrupación de clientes: primero Ganador (P1), después Básico (P2), En crecimiento (P3) y Ventas bajas (P4); dentro de cada prioridad, primero el de mayor importe. Los clientes que no están en la hoja van al final.</li>
+</ol></div>
+
+<div class="gcard"><h2>App de choferes (una vez, para conectarla)</h2>
+<p>La app guarda las entregas, la modulación, los descuentos y el GPS en un proyecto de <b>Firebase</b> (Google), gratis para este uso. Se arma una sola vez:</p>
+<ol>
+<li>Entrá a <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console.firebase.google.com</a> con la cuenta de Google de la empresa y tocá <b>Crear un proyecto</b> (por ejemplo "logistica-total"). Google Analytics no hace falta.</li>
+<li>En el menú <b>Compilación → Authentication</b> tocá <b>Comenzar</b>, elegí <b>Correo electrónico/contraseña</b> y activalo.</li>
+<li>En <b>Compilación → Realtime Database</b> tocá <b>Crear base de datos</b>, elegí la ubicación (Estados Unidos) y <b>Comenzar en modo bloqueado</b>.</li>
+<li>En esa misma pantalla, pestaña <b>Reglas</b>, borrá lo que hay, pegá estas reglas y tocá <b>Publicar</b>:
+<textarea class="g-reglas" readonly rows="8">{
+  &quot;rules&quot;: {
+    &quot;.read&quot;: false,
+    &quot;.write&quot;: false,
+
+    &quot;usuarios&quot;: {
+      &quot;.read&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).child(&#x27;rol&#x27;).val() === &#x27;modulador&#x27;&quot;,
+      &quot;$uid&quot;: {
+        &quot;.read&quot;: &quot;auth != null &amp;&amp; auth.uid === $uid&quot;,
+        &quot;.write&quot;: &quot;auth != null &amp;&amp; (root.child(&#x27;usuarios&#x27;).child(auth.uid).child(&#x27;rol&#x27;).val() === &#x27;modulador&#x27; || (!root.child(&#x27;usuarios&#x27;).exists() &amp;&amp; auth.uid === $uid &amp;&amp; newData.child(&#x27;rol&#x27;).val() === &#x27;modulador&#x27;))&quot;
+      }
+    },
+
+    &quot;dias&quot;: {
+      &quot;$dia&quot;: {
+        &quot;.read&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot;,
+        &quot;rutas&quot;: {
+          &quot;.write&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).child(&#x27;rol&#x27;).val() === &#x27;modulador&#x27;&quot;
+        },
+        &quot;visitas&quot;: { &quot;$pat&quot;: { &quot;.write&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot; } },
+        &quot;sesiones&quot;: { &quot;$pat&quot;: { &quot;.write&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot; } },
+        &quot;gps&quot;: { &quot;$pat&quot;: { &quot;.write&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot; } },
+        &quot;trazas&quot;: { &quot;$pat&quot;: { &quot;.write&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot; } }
+      }
+    },
+
+    &quot;descuentos&quot;: {
+      &quot;.read&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot;,
+      &quot;.indexOn&quot;: [&quot;dia&quot;, &quot;estado&quot;],
+      &quot;$id&quot;: {
+        &quot;.write&quot;: &quot;auth != null &amp;&amp; (root.child(&#x27;usuarios&#x27;).child(auth.uid).child(&#x27;rol&#x27;).val() === &#x27;modulador&#x27; || (!data.exists() &amp;&amp; newData.child(&#x27;estado&#x27;).val() === &#x27;pendiente&#x27; &amp;&amp; newData.child(&#x27;uid&#x27;).val() === auth.uid))&quot;
+      }
+    }
+  }
+}
+</textarea></li>
+<li>Tocá el engranaje → <b>Configuración del proyecto</b> → en "Tus apps" el ícono <b>&lt;/&gt;</b> (Web), poné un nombre (por ejemplo "Tablero") y registrala. Copiá los valores <code>apiKey</code> y <code>databaseURL</code> (si no aparece databaseURL, es la dirección que se ve arriba en Realtime Database, terminada en <code>firebaseio.com</code> o <code>firebasedatabase.app</code>) y pegalos en el archivo <code>docs/firebase-config.js</code> del repositorio.</li>
+<li>Abrí el Tablero → pestaña <a href="#choferes">App choferes</a> → <b>Primera vez: crear la cuenta del modulador</b>. Después, desde ahí mismo, das de alta a cada chofer con su usuario y contraseña.</li>
+<li>Cada chofer abre <b>jorgevichdarian.github.io/lotodeliver/app</b> en Chrome del celular, toca ⋮ → <b>Agregar a la pantalla principal</b>, entra con su usuario y permite la ubicación.</li>
+</ol>
+<p class="mut">Mientras la app está abierta, el GPS manda la ubicación del camión y la pantalla queda encendida. Con el celular bloqueado una página web no puede usar el GPS: para eso está prevista la versión instalable (APK).</p></div>
+
+<div class="gcard"><h2>3 · Horarios de referencia</h2>
+<table>
+<tr><td></td><td><b>Apertura de ruta</b></td><td><b>Fin de jornada</b></td></tr>
+<tr><td>Lunes a viernes</td><td>07:30 a 08:00</td><td>15:00</td></tr>
+<tr><td>Sábados</td><td>08:00 a 08:30</td><td>13:00</td></tr>
+</table>
+<p class="mut">El fin de jornada es la hora objetivo del semáforo (se puede cambiar arriba en el reporte; cada PC recuerda su valor). Si un camión levanta ruta fuera de la ventana de apertura, aparece un aviso amarillo debajo de su estado, sin cambiar el semáforo.</p></div>
+
+<div class="gcard"><h2>4 · Cómo leer el semáforo</h2>
+<ul>
+<li><b>Rojo:</b> con el ritmo actual termina más de 1 h después del objetivo, lleva más de 45 min de jornada sin visitas, o cerró con clientes pendientes.</li>
+<li><b>Amarillo:</b> termina hasta 1 h después del objetivo, o la jornada tiene un inicio anómalo (abierta desde la madrugada).</li>
+<li><b>Azul:</b> salió hace menos de 45 min: todavía no hay ritmo.</li>
+<li><b>Verde:</b> termina antes del objetivo, o no tiene pendientes y le falta cerrar.</li>
+<li><b>Gris:</b> jornada cerrada sin pendientes.</li>
+</ul></div>
+
+<div class="gcard"><h2>Para tener en cuenta</h2>
+<ul class="mut">
+<li>Si la sesión de Nextbyn o de Chess vence, el reporte lo avisa: entrá de nuevo y tocá Actualizar.</li>
+<li>La extensión solo le pasa datos a este reporte (jorgevichdarian.github.io). Los datos no se guardan en ningún servidor: quedan en el Chrome de quien lo usa.</li>
+<li>Para actualizar la extensión: descargá la nueva versión, reemplazá los archivos de la carpeta y en <code>chrome://extensions</code> tocá el botón de recargar de <b>Tablero de ruta</b>.</li>
+</ul></div>
+</section>
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="firebase-config.js"></script>
+<script src="lt-firebase.js"></script>
+<script src="choferes.js"></script>
+<script src="reporte.js"></script>
+<script src="mapa.js"></script>
+</body>
+</html>

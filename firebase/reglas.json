@@ -1,0 +1,35 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "usuarios": {
+      ".read": "auth != null && root.child('usuarios').child(auth.uid).child('rol').val() === 'modulador'",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('rol').val() === 'modulador' || (!root.child('usuarios').exists() && auth.uid === $uid && newData.child('rol').val() === 'modulador'))"
+      }
+    },
+
+    "dias": {
+      "$dia": {
+        ".read": "auth != null && root.child('usuarios').child(auth.uid).exists()",
+        "rutas": {
+          ".write": "auth != null && root.child('usuarios').child(auth.uid).child('rol').val() === 'modulador'"
+        },
+        "visitas": { "$pat": { ".write": "auth != null && root.child('usuarios').child(auth.uid).exists()" } },
+        "sesiones": { "$pat": { ".write": "auth != null && root.child('usuarios').child(auth.uid).exists()" } },
+        "gps": { "$pat": { ".write": "auth != null && root.child('usuarios').child(auth.uid).exists()" } },
+        "trazas": { "$pat": { ".write": "auth != null && root.child('usuarios').child(auth.uid).exists()" } }
+      }
+    },
+
+    "descuentos": {
+      ".read": "auth != null && root.child('usuarios').child(auth.uid).exists()",
+      ".indexOn": ["dia", "estado"],
+      "$id": {
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('rol').val() === 'modulador' || (!data.exists() && newData.child('estado').val() === 'pendiente' && newData.child('uid').val() === auth.uid))"
+      }
+    }
+  }
+}
