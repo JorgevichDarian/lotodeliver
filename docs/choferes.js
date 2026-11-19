@@ -11,6 +11,7 @@
   var CLAVE = 'ldTabChoferes';
   var cfg = leer(CLAVE, { fuente: 'app' });
   var DIA = window.LTFirebase ? LTFirebase.dia() : '';
+  var sigueHoy = true; // false cuando el Tablero eligió otro día de entrega
   var st = { perfil: null, rutas: null, visitas: {}, sesiones: {}, gps: {}, desc: {}, descViejos: {}, usuarios: null, error: '', at: null, pub: leer('ldTabPublicado', {}) };
   var oyentes = [], timer = null, raiz = null, publicando = false;
 
@@ -47,7 +48,7 @@
     leerViejos();
     clearInterval(timer);
     timer = setInterval(function () {
-      if (LTFirebase.dia() !== DIA) { DIA = LTFirebase.dia(); st.rutas = null; escuchar(); return; } // cambió el día
+      if (sigueHoy && LTFirebase.dia() !== DIA) { DIA = LTFirebase.dia(); st.rutas = null; escuchar(); return; } // cambió el día
       leerRutas(); leerViejos();
     }, 5 * 6e4);
     if (esModulador()) fb.get('usuarios').then(function (u) { st.usuarios = u || {}; pintarChoferes(); }, function () {});
@@ -134,6 +135,7 @@
   }
   function alLeerChess(ch, vt, nbReal) {
     if (!fb || !fb.sesion() || !esModulador() || publicando || !ch || !ch.data) return;
+    if (ch.dia && ch.dia !== DIA) return; // lectura de Chess de otro día
     var rutas = armarRutas(ch, vt, nbReal), firma = JSON.stringify(rutas);
     if (!Object.keys(rutas).length) return;
     if (st.pub.dia === DIA && st.pub.firma === firma && st.rutas && Object.keys(st.rutas).length) return;
@@ -277,6 +279,16 @@
     datosNb: datosNb,
     gps: function () { return st.gps; },
     alLeerChess: alLeerChess,
+    // El Tablero eligió el día de entrega: hoja de ruta, visitas y GPS de ese día.
+    ponerDia: function (d) {
+      if (!window.LTFirebase || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+      sigueHoy = d === LTFirebase.dia();
+      if (d === DIA) return;
+      DIA = d; st.rutas = null; st.visitas = {}; st.sesiones = {}; st.gps = {}; st.desc = {};
+      if (fb && fb.sesion() && st.perfil) escuchar(); else pintar();
+      if (api.alCambiar) api.alCambiar();
+    },
+    dia: function () { return DIA; },
     pendientes: function () { return pendientes().length; },
     abrir: function (el) { raiz = el; pintar(); },
     alCambiar: null,

@@ -33,11 +33,26 @@
   function objetivo(d) { return sabado(d) ? cfg.objSab : cfg.objLV; }
   function ventanaApertura(d) { return sabado(d) ? ['08:00', '08:30'] : ['07:30', '08:00']; }
 
+  // ---------- día de entrega elegido (por defecto hoy; la elección dura hasta que cambia el día) ----------
+  var CLAVE_DIA = 'ldReporteDia';
+  var selDia = (function () { var x = leerLS(CLAVE_DIA, null); return x && x.en === fechaISO() && /^\d{4}-\d{2}-\d{2}$/.test(x.dia || '') ? x.dia : fechaISO(); })();
+  function esHoy() { return selDia === fechaISO(); }
+  function fechaDe(iso) { var p = iso.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  // Hora de referencia para el análisis: ahora si es hoy; un día futuro, antes de empezar;
+  // un día pasado, al final del día (muestra cómo terminó).
+  function ahoraRef() {
+    if (esHoy()) return new Date();
+    var d = fechaDe(selDia);
+    if (selDia > fechaISO()) { var ap = ventanaApertura(d)[0].split(':'); d.setHours(+ap[0], +ap[1], 0, 0); } // antes de salir
+    else d.setHours(23, 59, 0, 0);
+    return d;
+  }
+
   // ---------- estado ----------
   var guardado = leerLS(CLAVE_DATOS, {});
   var hoy = new Date().toDateString();
-  var nb = guardado.nb && new Date(guardado.nb.at).toDateString() === hoy ? guardado.nb : null; // { cams, cli, at }
-  var ch = guardado.ch && new Date(guardado.ch.at).toDateString() === hoy ? guardado.ch : null; // { data, at }
+  var nb = esHoy() && guardado.nb && new Date(guardado.nb.at).toDateString() === hoy ? guardado.nb : null; // { cams, cli, at }
+  var ch = guardado.ch && new Date(guardado.ch.at).toDateString() === hoy && (guardado.ch.dia || fechaISO()) === selDia ? guardado.ch : null; // { data, at, dia }
   var errNb = '', errCh = '', errPr = '', sinExtension = false;
   var CLAVE_PRIO = 'ldReportePrio';
   var pr = leerLS(CLAVE_PRIO, null); // { mapa, at }
@@ -75,9 +90,10 @@
     if (d) { nb = d; errNb = ''; registrarObservaciones(); }
   }
   if (window.LTChoferes) {
+    if (LTChoferes.ponerDia) LTChoferes.ponerDia(selDia);
     LTChoferes.alCambiar = function (cambioFuente) {
       if (modoApp()) datosApp();
-      else if (cambioFuente) { nb = nbNextbyn; if (!nb) actualizar('nextbyn'); }
+      else if (cambioFuente) { nb = esHoy() ? nbNextbyn : null; if (!nb) actualizar('nextbyn'); }
       pintar();
     };
     LTChoferes.alGps = function () { if (window.LTMapa) LTMapa.refrescarGps(); };
@@ -85,19 +101,25 @@
 
   function actualizar(tipo) {
     if (tipo === 'nextbyn' && modoApp()) { datosApp(); pintar(); return Promise.resolve(); }
+    // Nextbyn solo muestra el día en curso.
+    if (tipo === 'nextbyn' && !esHoy()) { nb = null; errNb = 'Nextbyn solo tiene las entregas de hoy. Para otro día usá la app de choferes como fuente (pestaña App choferes).'; pintar(); return Promise.resolve(); }
     if (ocupado[tipo]) return Promise.resolve();
     ocupado[tipo] = true;
     pintarBotones();
-    return pedir(tipo).then(function (data) {
+    var diaPedido = selDia;
+    return pedir(tipo, tipo === 'chess' ? { fecha: diaPedido } : null).then(function (data) {
       sinExtension = false;
-      if (tipo === 'nextbyn') { nb = data; nbNextbyn = data; errNb = ''; registrarObservaciones(); } else { ch = data; errCh = ''; }
-      guardarLS(CLAVE_DATOS, { nb: nb, ch: ch });
+      if (diaPedido !== selDia) return; // mientras leía, se eligió otro día
+      if (tipo === 'nextbyn') { nb = data; nbNextbyn = data; errNb = ''; registrarObservaciones(); } else { data.dia = diaPedido; ch = data; errCh = ''; }
+      guardarLS(CLAVE_DATOS, { nb: esHoy() ? nb : nbNextbyn, ch: ch });
     }, function (e) {
       var m = String(e.message || e);
       if (m === 'NOEXT') { sinExtension = true; m = 'Falta la extensión'; }
+      if (diaPedido !== selDia) return;
       if (tipo === 'nextbyn') errNb = m; else errCh = m;
     }).then(function () {
       ocupado[tipo] = false; pintar(); quizasGuardar();
+      if (diaPedido !== selDia) return actualizar(tipo);
       if (tipo === 'chess' && !errCh) { quizasActualizarBase(); if (window.LTChoferes) LTChoferes.alLeerChess(ch, vt, nbNextbyn); }
     });
   }
@@ -484,7 +506,7 @@
   // de pendiente a entregado (precisión: el intervalo de actualización). Si el cliente ya figuraba
   // entregado la primera vez que el reporte lo vio, la hora queda desconocida.
   function registrarObservaciones() {
-    if (!nb) return;
+    if (!nb || !esHoy()) return;
     var hoyS = new Date().toDateString(), obs = leerLS(CLAVE_OBS, {});
     if (obs.dia !== hoyS) obs = { dia: hoyS, c: {} };
     var t = nb.at || Date.now();
@@ -763,11 +785,11 @@
     }
     $('aviso').innerHTML = av;
     $('vacio').hidden = !!nb;
-    if (!nb && modoApp()) $('vacio').innerHTML = window.LTChoferes.conSesion() ? '<h2>Esperando la hoja de ruta de hoy</h2><p>Las entregas llegan desde la app de choferes. La hoja de ruta se publica sola cuando el Tablero lee <b>Chess</b>: tocá <b>Actualizar todo</b>.</p>'
+    if (!nb && modoApp()) $('vacio').innerHTML = window.LTChoferes.conSesion() ? '<h2>Esperando la hoja de ruta ' + (esHoy() ? 'de hoy' : 'del ' + selDia.split('-').reverse().slice(0, 2).join('/')) + '</h2><p>Las entregas llegan desde la app de choferes. La hoja de ruta se publica sola cuando el Tablero lee <b>Chess</b>: tocá <b>Actualizar todo</b>.</p>'
       : '<h2>Entrá como modulador</h2><p>Las entregas llegan desde la app de choferes. Para verlas, entrá con tu usuario en la pestaña <a href="#choferes">App choferes</a>.</p>';
     if (!nb) { $('contenido').innerHTML = ''; return; }
 
-    var ahora = new Date();
+    var ahora = ahoraRef();
     var cams = analizar(nb.cams, ahora);
     var riesgoF = 0;
     cams.forEach(function (e) {
@@ -893,7 +915,7 @@
 
   // Guarda cada 30 minutos, cuando un camión cierra la jornada y una vez después de las 18:00.
   function quizasGuardar() {
-    if (!hcfg.url || !nb || !ch || hguardando) return;
+    if (!hcfg.url || !nb || !ch || hguardando || !esHoy()) return;
     var ahora = new Date(), hoyS = fechaISO(ahora);
     var cerrados = nb.cams.filter(function (c) { return c.estado === 'CERRADA'; }).map(function (c) { return c.patente; }).sort().join(',');
     var motivo = '';
@@ -1129,8 +1151,32 @@
   });
   var dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
   var meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-  var d0 = new Date();
-  $('hoy').textContent = 'CD Neuquén, ' + dias[d0.getDay()] + ' ' + d0.getDate() + ' de ' + meses[d0.getMonth()];
+  function pintarDia() {
+    var d0 = fechaDe(selDia);
+    $('hoy').textContent = 'CD Neuquén, ' + dias[d0.getDay()] + ' ' + d0.getDate() + ' de ' + meses[d0.getMonth()] + (esHoy() ? '' : selDia > fechaISO() ? ' (próximo día de entrega)' : ' (día anterior)');
+    $('f-dia').value = selDia;
+    $('b-hoy').hidden = esHoy();
+    document.body.classList.toggle('otro-dia', !esHoy());
+    $('l-obj').firstChild.textContent = 'Fin objetivo ' + (sabado(d0) ? '(sábados)' : '(lun a vie)');
+    $('obj').value = objetivo(d0);
+  }
+  function cambiarDia(d) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) d = fechaISO();
+    if (d === selDia) return pintarDia();
+    selDia = d;
+    guardarLS(CLAVE_DIA, { dia: selDia, en: fechaISO() });
+    ch = null; errCh = ''; errNb = '';
+    nb = modoApp() ? null : esHoy() ? nbNextbyn : null;
+    abiertos = {}; clientesAbiertos = {};
+    if (window.LTChoferes && LTChoferes.ponerDia) LTChoferes.ponerDia(selDia);
+    pintarDia();
+    pintar();
+    actualizar('chess');
+    if (!modoApp()) actualizar('nextbyn');
+  }
+  $('f-dia').addEventListener('change', function (e) { cambiarDia(e.target.value); });
+  $('b-hoy').addEventListener('click', function () { cambiarDia(fechaISO()); });
+  pintarDia();
   setInterval(pintarSub, 1000);
   // Redibuja cada minuto para que la línea de "ahora" avance aunque no haya datos nuevos.
   setInterval(function () { if (nb && location.hash !== '#guia') pintar(); }, 60000);
@@ -1138,7 +1184,7 @@
   // ---------- datos para la pestaña Ver en mapa (mapa.js) ----------
   function datosMapa() {
     if (!nb) return null;
-    var ahora = new Date();
+    var ahora = ahoraRef();
     var rutas = analizar(nb.cams, ahora).map(function (e) {
       var pat = String(e.patente).toUpperCase();
       var dc = ch && ch.data && ch.data[pat];

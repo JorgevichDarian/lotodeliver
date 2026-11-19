@@ -513,3 +513,12 @@ table.skus tr.sku-rech td{color:#9B1C1C}
 .mp-ley-cam{display:inline-grid;place-items:center;width:26px;height:20px;border-radius:5px;background:#5B6573;color:#fff;flex:none}
 .g-reglas{width:100%;margin-top:8px;font:12px/1.4 ui-monospace,Consolas,monospace;border:1px solid var(--linea);border-radius:6px;padding:8px;background:#F9FAFB;resize:vertical}
 .lotod{font:700 .62em/1 var(--ui);letter-spacing:.06em;color:var(--naranja);border:1.5px solid var(--naranja);border-radius:5px;padding:2px 6px;margin-left:6px;vertical-align:middle;text-transform:none}
+
+/* día de entrega */
+.dia-ent{display:inline-flex;align-items:center;gap:8px;color:#D5D8DE;font-weight:600;font-size:14px;margin-right:4px}
+.dia-ent input{font:inherit;font-size:14px;padding:5px 10px;border-radius:6px;border:1px solid #363B44;background:var(--noche2);color:#fff;color-scheme:dark}
+.dia-ent input:focus-visible{outline:2px solid var(--naranja);outline-offset:1px}
+body.otro-dia .dia-ent input{border-color:var(--naranja);box-shadow:0 0 0 1px var(--naranja)}
+body.otro-dia #hoy{color:#FFB877;font-weight:600}
+/* en otro día no hay "ahora": se oculta la línea de la hora actual */
+body.otro-dia .ahora,body.otro-dia .tag.a{display:none}

@@ -24,6 +24,10 @@ Este archivo sirve para retomar el proyecto en un chat nuevo: adjuntalo o pedile
 - **Pendiente del usuario:** crear el proyecto de Firebase (guía en la pestaña Guía del tablero) y pasar `apiKey` y `databaseURL` para cargarlos en `extension/firebase-config.js` (se copia a `docs/`).
 - **Próximos pasos conversados:** pulir el módulo de descuentos; APK; cambiar contraseñas desde el tablero; orden de visita óptimo (hoy: último orden de Nextbyn que tenga el tablero o el orden de Chess).
 
+## Día de entrega (1.1.0 / 1.2.0)
+- App: el chofer elige el día de entrega en la pantalla de camiones (por defecto hoy). En otro día no manda GPS.
+- Tablero: selector "Día de entrega" en el encabezado (por defecto hoy; la elección vale hasta que cambia el día). Pide a Chess ese día (`leerChess({fecha})`, busca planillas hasta 4 días antes con `fecentrecbt` = ese día), publica la hoja de ruta en `dias/{día}/rutas` y lee visitas/sesiones/GPS de ese día. Nextbyn y el guardado del Histórico solo funcionan con hoy. Día futuro: análisis a la hora de apertura; día pasado: a las 23:59.
+
 ## Estructura
 - `extension/`: extensión MV3 y el tablero (se publica igual en `docs/`).
   - `bg.js` (service worker: lee Chess y hojas de Google con la sesión del usuario), `lectores.js` (lectores inyectados en Chess/Nextbyn), `base-clientes.js` (base de clientes diaria desde Chess).

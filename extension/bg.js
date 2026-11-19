@@ -51,7 +51,7 @@ async function ejecutar(tabId, func, args) {
 
 // Usa una pestaña de la fuente que ya esté abierta; si no hay, abre una en segundo plano
 // y la cierra al terminar.
-async function leer(clave) {
+async function leer(clave, opts) {
   const f = FUENTES[clave];
   let [tab] = await chrome.tabs.query({ url: f.abiertas });
   let creada = false;
@@ -65,7 +65,7 @@ async function leer(clave) {
     if (!tab.url || new URL(tab.url).host !== host) {
       throw new Error(f.nombre + ' pidió iniciar sesión. Entrá con tu usuario y volvé a tocar Actualizar.');
     }
-    let r = await ejecutar(tab.id, f.lector, [{}]);
+    let r = await ejecutar(tab.id, f.lector, [opts || {}]);
     // En una pestaña de fondo la grilla de Clientes a veces no se dibuja: la muestra un momento.
     if (clave === 'nextbyn' && r && r.cams && !(r.cli && r.cli.n) && creada) {
       const [actual] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
@@ -197,17 +197,20 @@ function atender(msg) {
     return enCurso.baseClientes;
   }
   if (!FUENTES[clave] || clave === 'chessClientes') return Promise.resolve({ ok: false, error: 'Pedido desconocido.' });
-  if (!enCurso[clave]) {
-    enCurso[clave] = leer(clave)
+  // Chess puede pedirse para otro día de entrega (msg.fecha = 'aaaa-mm-dd').
+  const fecha = clave === 'chess' && /^\d{4}-\d{2}-\d{2}$/.test(msg.fecha || '') ? msg.fecha : '';
+  const k = clave + (fecha ? '|' + fecha : '');
+  if (!enCurso[k]) {
+    enCurso[k] = leer(clave, fecha ? { fecha: fecha } : {})
       .then((data) => ({ ok: true, data: data }))
       .catch((e) => {
         let m = String((e && e.message) || e);
         if (/error page|Cannot access|No tab with id/i.test(m)) m = 'No se pudo abrir ' + FUENTES[clave].nombre + '. Revisá la conexión a internet y volvé a tocar Actualizar.';
         return { ok: false, error: m };
       })
-      .finally(() => { delete enCurso[clave]; });
+      .finally(() => { delete enCurso[k]; });
   }
-  return enCurso[clave];
+  return enCurso[k];
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, responder) => {

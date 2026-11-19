@@ -228,10 +228,13 @@ async function leerNextbyn(opciones) {
 // Chess · Reporte de Repartos detallado (planillas de hoy y, si no hay, días anteriores)
 // Devuelve { data: { PATENTE: {...} }, at }
 // ---------------------------------------------------------------------------
-async function leerChess() {
+async function leerChess(opts) {
   const base = (/^\/[^/]+/.exec(location.pathname) || ['/AR1176'])[0];
-  const hoy = new Date();
+  // Día de entrega a leer: el que pide el Tablero (opts.fecha = 'aaaa-mm-dd') o hoy.
+  const f0 = opts && /^\d{4}-\d{2}-\d{2}$/.test(opts.fecha || '') ? opts.fecha : '';
+  const hoy = f0 ? new Date(+f0.slice(0, 4), +f0.slice(5, 7) - 1, +f0.slice(8, 10)) : new Date();
   const dia = (d) => d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  const esHoy = dia(hoy) === dia(new Date());
   const haceDias = (n) => dia(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - n));
   const esRetornable = (cod) => /(^|[\s\d*])RET(\b|\d)/i.test(cod || '') && !/\bKEG\b/i.test(cod || '');
 
@@ -267,7 +270,7 @@ async function leerChess() {
   }
 
   async function horasDeLiquidacion(porPatente) {
-    const fechaHoy = dia(new Date());
+    const fechaHoy = dia(hoy);
     const usuario = usuarioChess();
     const out = { ok: 0, camiones: 0, error: '' };
     const pats = Object.keys(porPatente);
@@ -279,7 +282,7 @@ async function leerChess() {
       if (!r.ok) throw new Error('planillasPendientes ' + r.status);
       const j = await r.json();
       const jornadas = ((j && j.dsPlaPdtes && j.dsPlaPdtes.ttPlaPdtes) || []).filter((x) =>
-        x.tipomov === 'JOR' && (x.jornadacerrada === false || String(x.fhinijornada || '').slice(0, 10) === fechaHoy));
+        x.tipomov === 'JOR' && ((esHoy && x.jornadacerrada === false) || String(x.fhinijornada || '').slice(0, 10) === fechaHoy));
       if (!jornadas.length) return;
       const r2 = await fetch(base + '/web/api/liquidacion/estadoLiquidacion', {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
@@ -385,8 +388,9 @@ async function leerChess() {
     });
     // Hora real de entrega: liquidación de cada camión (pantalla "Ver liquidación").
     let liq = { ok: 0, error: '' };
-    try { liq = await horasDeLiquidacion(porPatente); } catch (e) { liq.error = String((e && e.message) || e); }
-    return { data: porPatente, at: Date.now(), liq: liq, camposRep: camposRep };
+    // Un día futuro todavía no tiene liquidación.
+    if (dia(hoy) <= dia(new Date())) { try { liq = await horasDeLiquidacion(porPatente); } catch (e) { liq.error = String((e && e.message) || e); } }
+    return { data: porPatente, at: Date.now(), liq: liq, camposRep: camposRep, dia: dia(hoy) };
   } catch (e) {
     return { error: String((e && e.message) || e) };
   }
