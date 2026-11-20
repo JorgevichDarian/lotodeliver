@@ -58,7 +58,7 @@
   var pr = leerLS(CLAVE_PRIO, null); // { mapa, at }
   var CLAVE_VENT = 'ldReporteVent', CLAVE_OBS = 'ldReporteObs';
   var vt = leerLS(CLAVE_VENT, null); // { v: 3, mapa: { codigo: { f: [[desde, hasta] en minutos], nota, pago, ll: [lat, lng] } }, at }
-  if (vt && vt.v !== 5) vt = null; // caché anterior sin pago pendiente, ubicación o teléfono
+  if (vt && vt.v !== 6) vt = null; // caché anterior sin pago pendiente, ubicación o teléfono
   var errVt = '', leyendoVt = false;
   var abiertos = {}, clientesAbiertos = {};
   var ocupado = { nextbyn: false, chess: false };
@@ -66,6 +66,15 @@
 
   // ---------- conexión con la extensión ----------
   function enExtension() { return location.protocol === 'chrome-extension:'; }
+  // Versión de la extensión instalada (para avisar si quedó vieja respecto de la página).
+  var VERSION_PAG = ((document.querySelector('.ver') || {}).textContent || '').replace(/^v/, '').trim(), extVersion = '';
+  function consultarVersion() {
+    try {
+      var cb = function (r) { if (chrome.runtime.lastError || !r) return; extVersion = r.version || ''; pintar(); };
+      if (enExtension()) extVersion = chrome.runtime.getManifest().version;
+      else if (window.chrome && chrome.runtime && chrome.runtime.sendMessage) chrome.runtime.sendMessage(EXT_ID, { tipo: 'ping' }, cb);
+    } catch (e) { /* sin extensión */ }
+  }
   function pedir(tipo, extra) {
     var msg = Object.assign({ tipo: tipo }, extra || {});
     return new Promise(function (resolve, reject) {
@@ -167,7 +176,7 @@
     programar();
     // La hoja de prioridades cambia poco: se vuelve a leer si tiene más de 1 hora.
     if (!pr || Date.now() - pr.at > 36e5) actualizarPrioridades();
-    if (!vt || Date.now() - vt.at > 36e5) actualizarVentanas();
+    if (!vt || !vt.conTel || Date.now() - vt.at > 36e5) actualizarVentanas();
     return Promise.all([actualizar('nextbyn'), actualizar('chess')]);
   }
 
@@ -175,7 +184,9 @@
     if (leyendoVt) return;
     leyendoVt = true;
     pedir('ventanas').then(function (data) {
-      vt = { v: 5, mapa: armarVentanas(data.csv), at: data.at };
+      var mv = armarVentanas(data.csv);
+      vt = { v: 6, mapa: mv, at: data.at, conTel: !!mv.__conTel };
+      delete mv.__conTel;
       errVt = '';
       guardarLS(CLAVE_VENT, vt);
       // La hoja de ruta de la app lleva ubicación, ventana y teléfono de esta hoja: se vuelve a publicar.
@@ -502,6 +513,8 @@
       n++;
     });
     if (!n) throw new Error('La hoja de ventanas horarias no tiene clientes con código.');
+    // Las columnas de teléfono (M y N) llegan solo si la extensión está actualizada (1.5.0 o más).
+    mapa.__conTel = filas.some(function (f) { return f.length >= 9; });
     return mapa;
   }
   // Latitud y longitud del cliente (Argentina: ambas negativas). Sin dato o en 0: null.
@@ -830,6 +843,7 @@
     if (sinExtension) {
       av += '<div class="err">Para traer los datos hace falta la extensión <b>Tablero de ruta - LoToDeliver</b> en este Chrome. <a href="' + GUIA + '">Cómo instalarla</a>.</div>';
     } else {
+      if (extVersion && extVersion !== VERSION_PAG) av += '<div class="err">La extensión instalada en este Chrome es la <b>v' + esc(extVersion) + '</b> y el tablero es la <b>v' + VERSION_PAG + '</b>. Reemplazala con el archivo nuevo y tocá recargar en chrome://extensions; si no, algunos datos (como los teléfonos de los clientes) no llegan a la app. <a href="' + GUIA + '">Cómo</a>.</div>';
       if (window.LTChoferes && LTChoferes.pendientesNC && LTChoferes.pendientesNC()) av += '<div class="aviso-nc">' + LTChoferes.pendientesNC() + (LTChoferes.pendientesNC() === 1 ? ' visita no concretada espera' : ' visitas no concretadas esperan') + ' tu respuesta para salvar la entrega. <a href="#choferes">Responder</a></div>';
       if (window.LTChoferes && LTChoferes.pendientes()) av += '<div class="aviso-desc">' + LTChoferes.pendientes() + (LTChoferes.pendientes() === 1 ? ' pedido de descuento espera' : ' pedidos de descuento esperan') + ' respuesta. <a href="#choferes">Responder</a></div>';
       if (errNb) av += '<div class="err">Nextbyn: ' + esc(errNb) + (nb ? ' Se muestran los datos de las ' + hhmm(nb.at) + '.' : '') + '</div>';
@@ -1290,5 +1304,6 @@
   $('b-base').addEventListener('click', function () { actualizarBase(true); });
   pintarBase();
   pintar();
+  consultarVersion();
   actualizarTodo();
 })();
