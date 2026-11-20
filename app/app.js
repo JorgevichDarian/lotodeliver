@@ -145,7 +145,7 @@
         var r = rutas[pat], s = st.sesiones[pat], n = Object.keys(r.clientes || {}).length;
         var otro = s && !s.fin && s.uid !== fb.sesion().uid;
         h += '<button type="button" class="camion" data-pat="' + esc(pat) + '">' + chapa(pat) +
-          '<span class="cam-dato"><b>' + n + ' clientes</b>' + (r.chofer ? '<span>Chess: ' + esc(r.chofer) + '</span>' : '') +
+          '<span class="cam-dato">' + (r.chofer ? '<span>Chess: ' + esc(r.chofer) + '</span>' : '') +
           (otro ? '<span class="en-uso">En uso por ' + esc(s.nombre || s.usuario) + ' desde las ' + hhmm(s.inicio) + '</span>' : s && s.fin ? '<span class="en-uso">Jornada cerrada a las ' + hhmm(s.fin) + '</span>' : '') +
           '</span></button>';
       });
