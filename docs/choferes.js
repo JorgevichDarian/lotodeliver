@@ -129,7 +129,9 @@
         var est = !v ? '' : v.estado === 'entregado' ? 'ENTREGADO' : v.estado === 'parcial' ? 'ENTREGA PARCIAL' : 'RECHAZADO';
         if (!v) c.pend++; else if (v.estado === 'entregado') c.e++; else if (v.estado === 'parcial') c.p++; else c.r++;
         cli[cod] = {
-          nombre: x.nombre, domicilio: x.domicilio, estado: est, hora: v ? v.tLocal || v.t : null, seq: posOpt[cod] || x.n, optPos: posOpt[cod] || null,
+          nombre: x.nombre, domicilio: x.domicilio, estado: est, hora: v ? v.tLocal || v.t : null, seq: posOpt[cod] || x.n, n: x.n, optPos: posOpt[cod] || null,
+          demora: v && v.demora != null ? v.demora : null,
+          enCliente: !v && s && s.checkin && s.checkin.cod === cod && !s.fin ? s.checkin.tIn : null,
           nc: !v && st.nc[pat] && st.nc[pat][cod] ? { estado: st.nc[pat][cod].estado, motivo: st.nc[pat][cod].motivo, nota: st.nc[pat][cod].nota || '', t: st.nc[pat][cod].tLocal } : null,
           motivo: v ? [v.motivo, v.nota].filter(Boolean).join(': ') : '', fuente: 'app',
         };

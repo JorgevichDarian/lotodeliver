@@ -17,7 +17,7 @@
     <div>
     <span class="empresa">Logística Total SRL</span>
     <h1>Tablero de ruta <span class="lotod">LoToDeliver</span></h1>
-    <p class="donde"><span id="hoy">CD Neuquén</span> <span class="ver">v1.5.3</span></p>
+    <p class="donde"><span id="hoy">CD Neuquén</span> <span class="ver">v1.7.0</span></p>
     </div>
   </div>
   <div class="fuentes" aria-label="Fuentes de datos">
@@ -38,6 +38,8 @@
     <label class="chk"><input type="checkbox" id="auto" checked> Actualizar cada 5 min</label>
     <label id="l-obj">Fin objetivo<input id="obj" inputmode="numeric" maxlength="5"></label>
     <label>Alerta sin avance<input id="sin" inputmode="numeric" maxlength="3"> min</label>
+    <label title="Para el horario proyectado de cada ruta: minutos que se tarda en cada cliente">Demora por cliente<input id="demora" inputmode="numeric" maxlength="3"> min</label>
+    <label title="Ubicación de salida y regreso de los camiones, para sumar el viaje de ida y vuelta. Copiala de Google Maps (clic derecho sobre el CD → copiar coordenadas).">Ubicación CD<input id="cd-ll" placeholder="-38.95, -68.06" size="17"></label>
     <button type="button" id="b-base" class="base-btn"><span class="luz"></span>Base clientes <span class="base-est">sin actualizar</span></button>
   </div>
 </nav>

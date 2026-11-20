@@ -108,7 +108,7 @@ main{max-width:1480px;margin:0 auto;padding:14px 24px 48px}
 .estado .al.sec{color:var(--aviso)}
 
 /* línea del día: un carril por camión sobre el eje horario de la jornada */
-.dia{position:relative;height:40px}
+.dia{position:relative;height:54px}
 .reloj{position:relative;height:50px}
 .dia .carril{position:absolute;left:0;right:0;top:19px;height:2px;background:var(--linea2)}
 .dia .ventana{position:absolute;top:8px;bottom:8px;background:repeating-linear-gradient(135deg,rgba(47,114,208,.12) 0 4px,transparent 4px 8px)}
@@ -538,3 +538,21 @@ body.otro-dia .ahora,body.otro-dia .tag.a{display:none}
 .ch-d.nc.revisita{border-left-color:var(--verde)}.ch-d.nc.norevisitar{border-left-color:var(--rojo)}
 .ch-nc-card{border-top:3px solid #7B3FC4}
 .pill.p-nc{background:#EBDDFB;color:#5A2A99}
+
+/* horario proyectado de la ruta */
+.dia .plan{position:absolute;top:30px;height:6px;border-radius:3px;background:repeating-linear-gradient(90deg,#7B8BA3 0 6px,#AEB8C7 6px 10px);opacity:.75}
+.dia .plan.tarde{background:repeating-linear-gradient(90deg,#C86A1A 0 6px,#E9B07D 6px 10px)}
+.dia .plan-fin{position:absolute;top:26px;width:2px;height:14px;margin-left:-1px;background:#5B6A80}
+.dia .plan-fin.tarde{background:#C86A1A}
+.dia .plan-fin span{position:absolute;top:13px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:700;color:#5B6A80;white-space:nowrap;background:#fff;padding:0 3px;border-radius:3px}
+.dia .plan-fin.tarde span{color:#C86A1A}
+.plan-txt{display:block;color:#5B6A80;font-weight:700}
+.plan-txt.tarde{color:#C86A1A}
+#cd-ll{width:150px}
+
+/* demora en el cliente (check-in) */
+.dem{font-weight:700;white-space:nowrap}
+.dem.bien{color:var(--verde)}.dem.medio{color:var(--ambar)}.dem.mal{color:var(--rojo)}.dem.nada{color:var(--tenue);font-weight:400}
+.dem.en{color:#2F72D0;font-weight:600}
+.dem-res b.bien{color:var(--verde)}.dem-res b.medio{color:var(--ambar)}.dem-res b.mal{color:var(--rojo)}
+.pie b.bien{color:var(--verde)}.pie b.medio{color:var(--ambar)}.pie b.mal{color:var(--rojo)}

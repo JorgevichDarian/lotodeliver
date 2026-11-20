@@ -180,6 +180,8 @@
 
   // ---------- pantalla principal ----------
   function pantallaRuta() {
+    var ci = leer('ldAppCheckin', null);
+    st.checkin = ci && ci.dia === DIA && ci.pat === st.pat ? ci : null;
     var g = leer('ldAppOptimo', null);
     st.opt = g && g.dia === DIA && g.pat === st.pat && g.uid === fb.sesion().uid ? g : null;
     oyentesRuta.forEach(function (o) { o.cerrar(); });
@@ -277,7 +279,7 @@
         '<span class="n' + (usarOpt ? ' opt' : '') + '">' + (vis ? (vis.estado === 'modulado' ? '✕' : '✓') : usarOpt ? i + 1 : (c.n || '·')) + '</span>' +
         '<span class="cli-txt"><b>' + esc(c.nombre) + '</b><span>' + esc(c.domicilio || '') + (c.localidad ? ', ' + esc(c.localidad) : '') + '</span>' +
         (vis ? '<span class="cli-est">' + TXT_EST[vis.estado] + (vis.motivo ? ': ' + esc(vis.motivo) : '') + ' · ' + hhmm(vis.tLocal) + (st.local[c.codigo] ? ' · sin enviar' : '') + '</span>'
-          : '<span class="cli-ven">' + esc(c.ventana || 'Sin ventana') + '</span>' + lineaNC(c.codigo) + (usarOpt ? lineaLlegada(c, ll) : '')) +
+          : '<span class="cli-ven">' + esc(c.ventana || 'Sin ventana') + '</span>' + (st.checkin && st.checkin.cod === c.codigo ? '<span class="cli-ci">En el cliente <b class="reloj-ci" data-t="' + st.checkin.tIn + '">' + reloj(st.checkin.tIn) + '</b></span>' : '') + lineaNC(c.codigo) + (usarOpt ? lineaLlegada(c, ll) : '')) +
         '</span><span class="cod">' + esc(c.codigo) + '</span></button></li>';
     }).join('') + '</ul>';
     v.innerHTML = h;
@@ -394,6 +396,12 @@
     if (vis) h += '<p class="ya ' + vis.estado + '">' + TXT_EST[vis.estado] + (vis.motivo ? ': ' + esc(vis.motivo) : '') + (vis.nota ? ' (' + esc(vis.nota) + ')' : '') + ' a las ' + hhmm(vis.tLocal) + '. Podés corregirlo abajo.</p>';
     var nc = !vis && st.nc[cod];
     if (nc) h += '<p class="ya nc ' + nc.estado + '">' + textoNC(nc) + '</p>';
+    if (!vis) {
+      var ci = st.checkin;
+      if (ci && ci.cod === cod) h += '<div class="ci-activo"><span>En el cliente desde las ' + hhmm(ci.tIn) + '</span><b class="reloj-ci" data-t="' + ci.tIn + '">' + reloj(ci.tIn) + '</b>' +
+        '<button type="button" class="ci-cancelar" data-ci-no>Cancelar check-in</button></div>';
+      else h += '<button type="button" class="btn azul ancho ci-btn" data-ci>Check-in: llegué al cliente' + (ci ? '<small>Cierra el check-in de ' + esc((ruta().clientes[ci.cod] || {}).nombre || ci.cod) + '</small>' : '') + '</button>';
+    }
     h += '<div class="acciones"><button type="button" class="btn ok grande" data-est="entregado">Entregado</button>' +
       '<button type="button" class="btn sec" data-est="parcial">Entrega parcial</button>' +
       '<button type="button" class="btn malo" data-est="modulado">No se entregó</button>' +
@@ -420,7 +428,36 @@
     });
     $hoja.querySelector('[data-desc]').onclick = function () { formDescuento({ cliente: cod }); };
     $hoja.querySelector('[data-nc]').onclick = function () { fichaNoConcretada(cod); };
+    var bci = $hoja.querySelector('[data-ci]'); if (bci) bci.onclick = function () { checkIn(cod); fichaCliente(cod); };
+    var bno = $hoja.querySelector('[data-ci-no]'); if (bno) bno.onclick = function () { cerrarCheckin(); fichaCliente(cod); };
   }
+
+  // ---------- check-in: mide la demora en cada cliente (de "llegué" a marcar el estado) ----------
+  function reloj(t) { var s = Math.max(0, Math.floor((Date.now() - t) / 1000)); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+  function checkIn(cod) {
+    st.checkin = { dia: DIA, pat: st.pat, cod: cod, tIn: Date.now() };
+    guardar('ldAppCheckin', st.checkin);
+    fb.encolar('patch', 'dias/' + DIA + '/sesiones/' + st.pat, { checkin: { cod: cod, tIn: st.checkin.tIn } });
+    avisar('Check-in hecho. El tiempo corre hasta que marques cómo terminó la visita.');
+    pintarTodo();
+  }
+  function cerrarCheckin() {
+    st.checkin = null;
+    guardar('ldAppCheckin', null);
+    fb.encolar('patch', 'dias/' + DIA + '/sesiones/' + st.pat, { checkin: null });
+    pintarTodo();
+  }
+  // Devuelve { tCheckin, demora (min) } si había check-in en ese cliente, y lo cierra.
+  function cerrarDemora(cod) {
+    var ci = st.checkin;
+    if (!ci || ci.cod !== cod) return {};
+    var r = { tCheckin: ci.tIn, demora: Math.round((Date.now() - ci.tIn) / 6000) / 10 };
+    cerrarCheckin();
+    return r;
+  }
+  setInterval(function () {
+    Array.prototype.forEach.call(document.querySelectorAll('.reloj-ci'), function (el) { el.textContent = reloj(+el.getAttribute('data-t')); });
+  }, 1000);
 
   // ---------- visita no concretada (el modulador decide si se re-visita) ----------
   var MOTIVOS_NC = ['Cerrado', 'Camino intransitable'];
@@ -445,9 +482,10 @@
       '<p class="sub">¿Qué pasó?</p><div class="motivos">' + MOTIVOS_NC.map(function (m) { return '<button type="button" class="btn morado motivo" data-m="' + esc(m) + '">' + esc(m) + '</button>'; }).join('') + '</div>');
     Array.prototype.forEach.call($hoja.querySelectorAll('.motivo'), function (b) {
       b.onclick = function () {
+        var dm = cerrarDemora(cod);
         var rec = {
           motivo: b.getAttribute('data-m'), nota: document.getElementById('nota').value.trim() || null, estado: 'pendiente',
-          intento: (prev && prev.intento || 0) + 1, cliente: c.nombre, pat: st.pat, dia: DIA,
+          intento: (prev && prev.intento || 0) + 1, cliente: c.nombre, pat: st.pat, dia: DIA, tCheckin: dm.tCheckin || null, demora: dm.demora != null ? dm.demora : null,
           tLocal: Date.now(), t: fb.AHORA, uid: fb.sesion().uid, usuario: fb.sesion().usuario, chofer: st.perfil.nombre || fb.sesion().usuario,
         };
         fb.encolar('put', 'dias/' + DIA + '/noconcretadas/' + st.pat + '/' + cod, rec);
@@ -484,6 +522,8 @@
   }
   function cargarVisita(cod, v) {
     var x = { estado: v.estado, motivo: v.motivo || null, nota: v.nota || null, tLocal: Date.now(), t: fb.AHORA, uid: fb.sesion().uid, usuario: fb.sesion().usuario, ll: st.gps.ll || null, acc: st.gps.acc ? Math.round(st.gps.acc) : null };
+    var dm = cerrarDemora(cod);
+    if (dm.tCheckin) { x.tCheckin = dm.tCheckin; x.demora = dm.demora; }
     st.local[cod] = x;
     fb.encolar('put', 'dias/' + DIA + '/visitas/' + st.pat + '/' + cod, x);
     cerrarHoja();

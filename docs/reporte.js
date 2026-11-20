@@ -29,7 +29,8 @@
 
   // ---------- configuración ----------
   var CLAVE_AL = 'ldReporteAlertas', alAbierto = !!leerLS(CLAVE_AL, false); // panel de alertas: minimizado por defecto
-  var cfg = Object.assign({ objLV: '15:00', objSab: '13:00', sinAvance: 45 }, leerLS(CLAVE_CFG, {}));
+  var cfg = Object.assign({ objLV: '15:00', objSab: '13:00', sinAvance: 45, demora: 10, cdLL: [-38.889468, -68.103915] }, leerLS(CLAVE_CFG, {}));
+  if (!cfg.cdLL) cfg.cdLL = [-38.889468, -68.103915]; // CD Neuquén
   function objetivo(d) { return sabado(d) ? cfg.objSab : cfg.objLV; }
   function ventanaApertura(d) { return sabado(d) ? ['08:00', '08:30'] : ['07:30', '08:00']; }
 
@@ -226,6 +227,7 @@
     var res = cams.map(function (c) {
       var e = Object.assign({}, c);
       e.alertas = []; e.aviso = ''; e.tarde = 0;
+      try { e.plan = planRuta(e, ahora); } catch (x) { e.plan = null; }
       var ini = e.inicio ? new Date(e.inicio) : null;
       if (ini && ini.getHours() >= 4) {
         var v = ventanaApertura(ini), v0 = aHora(ini, v[0]), v1 = aHora(ini, v[1]);
@@ -270,6 +272,7 @@
       var i = e.inicio && new Date(e.inicio);
       if (i && i.getHours() >= 4) desde = Math.min(desde, i.getHours());
       if (e.fin && e.fin.toDateString() === ahora.toDateString()) hasta = Math.max(hasta, Math.ceil(e.fin.getHours() + e.fin.getMinutes() / 60));
+      if (e.plan && e.plan.fin.toDateString() === ahora.toDateString()) hasta = Math.max(hasta, Math.ceil(e.plan.fin.getHours() + e.plan.fin.getMinutes() / 60));
     });
     hasta = Math.min(Math.max(hasta, desde + 6), 22);
     var a = aHora(ahora, ('0' + desde).slice(-2) + ':00').getTime();
@@ -279,6 +282,39 @@
       x: function (t) { t = +new Date(t); return Math.max(0, Math.min(100, ((t - a) / (b - a)) * 100)); },
       fuera: function (t) { return +new Date(t) > b; },
     };
+  }
+
+  // ---------- horario proyectado de la ruta ----------
+  // Desde el inicio de ruta (o la apertura, si todavía no salió): viaje del CD al primer cliente, entre
+  // clientes en el orden de la hoja de ruta y de vuelta al CD, en línea recta × 1,3 (calles) a 25 km/h,
+  // más la demora por cliente.
+  var VEL_KMH = 25, FACTOR_CALLES = 1.3;
+  function kmEntre(a, b) {
+    var r = Math.PI / 180, dLa = (b[0] - a[0]) * r, dLo = (b[1] - a[1]) * r;
+    var x = Math.sin(dLa / 2) * Math.sin(dLa / 2) + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dLo / 2) * Math.sin(dLo / 2);
+    return 2 * 6371 * Math.asin(Math.sqrt(x)) * FACTOR_CALLES;
+  }
+  function planRuta(e, ahora) {
+    var pat = String(e.patente).toUpperCase(), lista = listaClientes(pat);
+    if (!lista.length) return null;
+    var orden = lista.map(function (c, i) { return { c: c, k: c.n != null ? c.n : c.seq != null ? c.seq : 1e4 + i, i: i }; })
+      .sort(function (a, b) { return a.k - b.k || a.i - b.i; }).map(function (x) { return x.c; });
+    var ini = e.inicio ? new Date(e.inicio) : null;
+    if (!ini || ini.getHours() < 4) ini = aHora(ahora, ventanaApertura(ahora)[0]);
+    var dem = Math.max(0, +cfg.demora || 0), km = 0, sinLl = 0, prev = cfg.cdLL, n = 0;
+    orden.forEach(function (c) {
+      var v = vt && vt.mapa && c.codigo ? vt.mapa[c.codigo] : null;
+      if (v && v.ll) { if (prev) km += kmEntre(prev, v.ll); prev = v.ll; } else sinLl++;
+      n++;
+    });
+    if (cfg.cdLL && prev && prev !== cfg.cdLL) km += kmEntre(prev, cfg.cdLL);
+    var manejo = km / VEL_KMH * 60, total = manejo + n * dem;
+    return { ini: ini, fin: new Date(ini.getTime() + total * 6e4), km: km, manejo: manejo, n: n, sinLl: sinLl, conCD: !!cfg.cdLL };
+  }
+  function textoPlan(p) {
+    return 'Horario proyectado: sale ' + hhmm(p.ini) + ', termina ~' + hhmm(p.fin) + ' (' + p.n + ' clientes × ' + cfg.demora + ' min + ' +
+      Math.round(p.km) + ' km a ' + VEL_KMH + ' km/h = ' + Math.round(p.manejo) + ' min de manejo' + (p.conCD ? ', con ida y vuelta al CD' : ', sin el viaje desde y hacia el CD') + ')' +
+      (p.sinLl ? '. ' + p.sinLl + ' clientes sin ubicación: solo suman la demora.' : '.');
   }
 
   function lineaDelDia(e, E, ahora) {
@@ -297,12 +333,18 @@
       c += '<div class="proy" style="left:' + xa + '%;width:' + Math.max(0, xf - xa) + '%"></div>';
       c += '<div class="fin' + (fuera ? ' fuera' : '') + '" style="left:' + xf + '%"></div>';
     }
+    if (e.plan) {
+      var pf = E.fuera(e.plan.fin), xpi = E.x(e.plan.ini), xpf = pf ? 100 : E.x(e.plan.fin);
+      c += '<div class="plan' + (e.plan.fin > obj ? ' tarde' : '') + '" style="left:' + xpi + '%;width:' + Math.max(0.5, xpf - xpi) + '%" title="' + esc(textoPlan(e.plan)) + '"></div>' +
+        '<div class="plan-fin' + (e.plan.fin > obj ? ' tarde' : '') + '" style="left:' + xpf + '%" title="' + esc(textoPlan(e.plan)) + '"><span>' + hhmm(e.plan.fin) + '</span></div>';
+    }
     c += '<div class="obj" style="left:' + E.x(obj) + '%"></div><div class="ahora" style="left:' + xa + '%"></div></div>';
     return c;
   }
   function lineaTitulo(e) {
     var t = 'Inicio ' + hhmm(e.inicio);
     if (e.fin) t += ', fin estimado ' + hhmm(e.fin);
+    if (e.plan) t += '. ' + textoPlan(e.plan);
     return t;
   }
 
@@ -359,6 +401,9 @@
       c.horaNb = x && x.hora ? x.hora : null;
       c.seq = x && x.seq != null ? x.seq : null;
       c.optPos = x && x.optPos ? x.optPos : null;
+      c.n = x && x.n != null ? x.n : null;
+      c.demora = x && x.demora != null ? x.demora : null;
+      c.enCliente = x && x.enCliente ? x.enCliente : null;
       c.nc = x && x.nc ? x.nc : null;
       c.est = c.rechazado ? 'rechazado' : c.parcial ? 'parcial' : c.entregado ? 'entregado' : '';
       var s = x && estadoNextbyn(x.estado);
@@ -655,7 +700,7 @@
     if (dc) return cruzar(dc, nbCli);
     return Object.keys(nbCli).map(function (id) {
       var x = nbCli[id];
-      return { codigo: id.indexOf('N:') ? id : '', cliente: (id.indexOf('N:') ? id + ' - ' : '') + x.nombre, domicilio: x.domicilio, nbEstado: x.estado, motivos: x.motivo ? [x.motivo] : [], horaNb: x.hora || null, seq: x.seq != null ? x.seq : null, optPos: x.optPos || null, nc: x.nc || null, leidoNextbyn: true, est: estadoNextbyn(x.estado) };
+      return { codigo: id.indexOf('N:') ? id : '', cliente: (id.indexOf('N:') ? id + ' - ' : '') + x.nombre, domicilio: x.domicilio, nbEstado: x.estado, motivos: x.motivo ? [x.motivo] : [], horaNb: x.hora || null, seq: x.seq != null ? x.seq : null, n: x.n != null ? x.n : null, demora: x.demora != null ? x.demora : null, enCliente: x.enCliente || null, optPos: x.optPos || null, nc: x.nc || null, leidoNextbyn: true, est: estadoNextbyn(x.estado) };
     });
   }
   function pct(a, b) { return b ? Math.round((a / b) * 100) + '%' : '—'; }
@@ -699,6 +744,36 @@
     return cam && cam.optimo ? cam.optimo : null;
   }
   function posOptimo(c) { return !c.est && c.optPos ? '<span class="opt-pos" title="Orden en la ruta óptima que calculó la app">' + c.optPos + '.º en ruta óptima</span>' : ''; }
+  // ---------- demora en el cliente (check-in de la app → estado de la visita) ----------
+  function fmtMin(m) { return (Math.round(m * 10) / 10).toFixed(1).replace('.', ',').replace(',0', '') + ' min'; }
+  function celdaDemora(c) {
+    if (c.enCliente) return '<span class="dem en" data-ci="' + c.enCliente + '" title="Check-in a las ' + hhmm(c.enCliente) + '">En el cliente <b>' + fmtMin((Date.now() - c.enCliente) / 6e4) + '</b></span>';
+    if (c.demora == null) return '<span class="dem nada" title="Sin check-in en la app">—</span>';
+    var lim = +cfg.demora || 10;
+    return '<span class="dem ' + (c.demora > lim * 1.5 ? 'mal' : c.demora > lim ? 'medio' : 'bien') + '">' + fmtMin(c.demora) + '</span>';
+  }
+  function demoraProm(lista) {
+    var d = lista.filter(function (c) { return c.demora != null; }).map(function (c) { return c.demora; });
+    return { n: d.length, prom: d.length ? d.reduce(function (a, b) { return a + b; }, 0) / d.length : null };
+  }
+  function resumenDemora(lista) {
+    if (!modoApp()) return '';
+    var d = demoraProm(lista), lim = +cfg.demora || 10, en = lista.filter(function (c) { return c.enCliente; })[0];
+    return '<span class="ot-res dem-res" title="Demora por cliente: la configurada arriba (la usa el horario proyectado). Demora actual: promedio real entre el check-in y el estado de la visita en la app.">' +
+      'Demora por cliente <b>' + fmtMin(lim) + '</b> · actual <b class="' + (d.prom == null ? '' : d.prom > lim * 1.5 ? 'mal' : d.prom > lim ? 'medio' : 'bien') + '">' + (d.prom == null ? '—' : fmtMin(d.prom)) + '</b>' +
+      ' <small>' + (d.n ? d.n + (d.n === 1 ? ' visita' : ' visitas') + ' con check-in' : 'sin check-in todavía') + (en ? ' · ahora en ' + esc(String(en.cliente).replace(/^\s*\d+\s*-\s*/, '')) : '') + '</small></span>';
+  }
+  function demoraFlota() {
+    var t = 0, n = 0;
+    ((nb && nb.cams) || []).forEach(function (cam) {
+      var d = demoraProm(listaClientes(String(cam.patente).toUpperCase()));
+      if (d.n) { t += d.prom * d.n; n += d.n; }
+    });
+    return { n: n, prom: n ? t / n : null };
+  }
+  setInterval(function () {
+    Array.prototype.forEach.call(document.querySelectorAll('.dem.en'), function (el) { el.querySelector('b').textContent = fmtMin((Date.now() - +el.getAttribute('data-ci')) / 6e4); });
+  }, 15000);
   function nivelCump(o) { return !o.n ? '' : o.ok / o.n >= 0.85 ? 'bien' : o.ok / o.n >= 0.65 ? 'medio' : 'mal'; }
   function resumenOptimo(pat) {
     if (!modoApp()) return '';
@@ -781,9 +856,9 @@
       if (!ids.length) return '<div class="dres">' + msg + '</div>';
       var lista = listaClientes(pat);
       ordenarClientes(pat, lista, ahora);
-      return '<div class="dres"><span>' + msg + '</span><span>Clientes <b>' + lista.length + '</b></span><span>Entregados <b>' + lista.filter(function (c) { return c.est === 'entregado'; }).length + '</b></span>' + resumenOT(otDeCamion(pat, ahora)) + resumenOptimo(pat) + resumenRiesgo(pat, ahora) + avisoOT() + '</div>' +
-        '<div class="tabla-cli"><table class="cli"><thead><tr><th>Estado</th><th>Cliente</th><th class="h-ot">Ventana y entrega</th><th class="h-pago">Pago pendiente</th><th class="h-dom">Domicilio</th></tr></thead><tbody>' +
-        lista.map(function (c) { var r = evaluarOT(pat, c, ahora); return '<tr><td>' + pillEstado(c) + '</td><td><b>' + esc(c.cliente) + '</b>' + posOptimo(c) + notaVentana(r) + '</td><td class="h-ot">' + lineaCliente(r, E, ahora) + '</td><td class="h-pago">' + pillPago(c) + '</td><td class="h-dom">' + esc(c.domicilio) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+      return '<div class="dres"><span>' + msg + '</span><span>Clientes <b>' + lista.length + '</b></span><span>Entregados <b>' + lista.filter(function (c) { return c.est === 'entregado'; }).length + '</b></span>' + resumenOT(otDeCamion(pat, ahora)) + resumenOptimo(pat) + resumenDemora(lista) + resumenRiesgo(pat, ahora) + avisoOT() + '</div>' +
+        '<div class="tabla-cli"><table class="cli"><thead><tr><th>Estado</th><th>Cliente</th><th class="h-ot">Ventana y entrega</th><th class="h-dem">Demora</th><th class="h-pago">Pago pendiente</th><th class="h-dom">Domicilio</th></tr></thead><tbody>' +
+        lista.map(function (c) { var r = evaluarOT(pat, c, ahora); return '<tr><td>' + pillEstado(c) + '</td><td><b>' + esc(c.cliente) + '</b>' + posOptimo(c) + notaVentana(r) + '</td><td class="h-ot">' + lineaCliente(r, E, ahora) + '</td><td class="h-dem">' + celdaDemora(c) + '</td><td class="h-pago">' + pillPago(c) + '</td><td class="h-dom">' + esc(c.domicilio) + '</td></tr>'; }).join('') + '</tbody></table></div>';
     }
 
     // Con Chess: cruza cada cliente con su estado en Nextbyn.
@@ -796,16 +871,16 @@
       '<span>Clientes <b>' + cs.length + '</b></span><span>Entregados <b>' + nEnt + '</b></span>' + (nRe ? '<span>Rechazos <b>' + nRe + '</b></span>' : '') +
       '<span>Importe <b>' + plata(dc.importe) + '</b></span><span>Bultos <b>' + Math.round(dc.bultos) + '</b></span>' +
       '<span>Cajones retornables <b>' + Math.round(dc.cajones) + '</b></span>' +
-      (hayNb ? '' : '<span>Sin estados de Nextbyn: el estado sale de Chess.</span>') + resumenOT(otDeCamion(pat, ahora)) + resumenOptimo(pat) + resumenRiesgo(pat, ahora) + avisoOT() + '</div>' +
-      '<div class="tabla-cli"><table class="cli"><thead><tr><th>Estado</th><th>Cliente</th><th class="h-ot">Ventana y entrega</th><th class="h-pago">Pago pendiente</th><th class="h-dom">Domicilio</th><th class="h-loc">Localidad</th><th class="h-comp">Comprobante</th><th class="n">Importe</th><th class="n">Bultos</th><th class="n">Cajones</th></tr></thead><tbody>';
+      (hayNb ? '' : '<span>Sin estados de Nextbyn: el estado sale de Chess.</span>') + resumenOT(otDeCamion(pat, ahora)) + resumenOptimo(pat) + resumenDemora(cs) + resumenRiesgo(pat, ahora) + avisoOT() + '</div>' +
+      '<div class="tabla-cli"><table class="cli"><thead><tr><th>Estado</th><th>Cliente</th><th class="h-ot">Ventana y entrega</th><th class="h-dem">Demora</th><th class="h-pago">Pago pendiente</th><th class="h-dom">Domicilio</th><th class="h-loc">Localidad</th><th class="h-comp">Comprobante</th><th class="n">Importe</th><th class="n">Bultos</th><th class="n">Cajones</th></tr></thead><tbody>';
     cs.forEach(function (c) {
       var k = pat + '|' + c.cliente, abierto = !!clientesAbiertos[k], rOT = evaluarOT(pat, c, ahora);
       h += '<tr class="cl" data-cl="' + esc(k) + '"><td>' + pillEstado(c) +
         (c.motivos && c.motivos.length ? '<span class="motivo">' + esc(c.motivos.join(', ')) + '</span>' : '') +
-        '</td><td><span class="car' + (abierto ? ' rot' : '') + '">▸</span><b>' + esc(c.cliente) + '</b>' + posOptimo(c) + notaVentana(rOT) + '</td><td class="h-ot">' + lineaCliente(rOT, E, ahora) + '</td><td class="h-pago">' + pillPago(c) + '</td><td class="h-dom">' + esc(c.domicilio) + '</td><td class="h-loc">' + esc(c.localidad) +
+        '</td><td><span class="car' + (abierto ? ' rot' : '') + '">▸</span><b>' + esc(c.cliente) + '</b>' + posOptimo(c) + notaVentana(rOT) + '</td><td class="h-ot">' + lineaCliente(rOT, E, ahora) + '</td><td class="h-dem">' + celdaDemora(c) + '</td><td class="h-pago">' + pillPago(c) + '</td><td class="h-dom">' + esc(c.domicilio) + '</td><td class="h-loc">' + esc(c.localidad) +
         '</td><td class="h-comp" style="font-size:13px">' + esc(c.comprobantes.join(', ')) + '</td><td class="n">' + plata(c.importe) + '</td><td class="n">' + num(c.bultos) + '</td><td class="n">' + num(c.cajones) + '</td></tr>';
       if (abierto) {
-        h += '<tr class="prod"><td colspan="10">' + detalleProductos(c) + '</td></tr>';
+        h += '<tr class="prod"><td colspan="11">' + detalleProductos(c) + '</td></tr>';
       }
     });
     return h + '</tbody></table></div>';
@@ -898,7 +973,8 @@
       (modoApp() ? (function () {
         var f = cumplimientoFlota();
         return '<p class="pie opt-flota ' + nivelCump(f) + '" title="Visitas hechas en el orden de la ruta óptima calculada en la app, sobre las visitas hechas después de calcularla">Cumplimiento ruta óptima <b>' + pct(f.ok, f.n) + '</b> ' +
-          (f.n ? f.ok + ' de ' + f.n + ' visitas en orden' : 'sin visitas con ruta óptima') + ' · ' + f.con + ' de ' + f.cam + ' camiones la calcularon</p>';
+          (f.n ? f.ok + ' de ' + f.n + ' visitas en orden' : 'sin visitas con ruta óptima') + ' · ' + f.con + ' de ' + f.cam + ' camiones la calcularon</p>' +
+          (function () { var d = demoraFlota(), lim = +cfg.demora || 10; return '<p class="pie" title="Promedio real entre el check-in y el estado de la visita en la app">Demora por cliente <b>' + fmtMin(lim) + '</b> · actual <b class="' + (d.prom == null ? '' : d.prom > lim * 1.5 ? 'mal' : d.prom > lim ? 'medio' : 'bien') + '">' + (d.prom == null ? '—' : fmtMin(d.prom)) + '</b> ' + (d.n ? d.n + ' visitas con check-in' : 'sin check-in todavía') + '</p>'; })();
       })() : '') + '</div>' +
       // OT
       '<div class="grupo g-ot"><h2>Entregas en ventana (OT)</h2><div class="dos">' +
@@ -930,7 +1006,8 @@
         '<div class="avance" title="' + e.entregados + ' entregados, ' + e.parciales + ' parciales, ' + e.rechazos + ' rechazos, ' + e.pendientes + ' pendientes"><i class="e" style="width:' + ancho(e.entregados) + '%"></i><i class="p" style="width:' + ancho(e.parciales) + '%"></i><i class="r" style="width:' + ancho(e.rechazos) + '%"></i></div>' +
         (otCam[e.patente] && otCam[e.patente].total ? '<span class="mini" title="OT en vivo: a tiempo sobre visitados (' + otCam[e.patente].ok + ' de ' + otCam[e.patente].visitados + '). OT del día: ' + pct(otCam[e.patente].ok, otCam[e.patente].total) + ' sobre ' + otCam[e.patente].total + ' pedidos.">OT vivo ' + pct(otCam[e.patente].ok, otCam[e.patente].visitados) + '</span>' : '') + '</div>' +
         '<div class="c-ritmo n"><span class="big">' + (e.ritmo ? e.ritmo.toFixed(1) : '—') + '</span><span class="mini">cli/h</span></div>' +
-        '<div class="c-fin n"><span class="big">' + (e.fin ? hhmm(e.fin) : '—') + '</span><span class="mini">' +
+        '<div class="c-fin n"' + (e.plan ? ' title="' + esc(textoPlan(e.plan)) + '"' : '') + '><span class="big">' + (e.fin ? hhmm(e.fin) : '—') + '</span><span class="mini">' +
+        (e.plan ? '<b class="plan-txt' + (e.plan.fin > aHora(ahora, objetivo(ahora)) ? ' tarde' : '') + '">plan ' + hhmm(e.plan.fin) + '</b> ' : '') +
         (e.fin && e.fin.toDateString() !== ahora.toDateString() ? 'mañana' : e.estado === 'ABIERTA' && e.pendientes ? (e.sinAvanceMin < 1 ? 'visita hace <1 min' : 'visita hace ' + Math.round(e.sinAvanceMin) + ' min') : e.estado === 'CERRADA' ? 'cerrada' : '') +
         '</span></div></div>';
       if (abierto) h += '<div class="det">' + detalle(e, E, ahora) + '</div>';
@@ -1211,6 +1288,21 @@
   $('l-obj').firstChild.textContent = 'Fin objetivo ' + (sabado() ? '(sábados)' : '(lun a vie)');
   $('obj').value = objetivo(new Date());
   $('sin').value = cfg.sinAvance;
+  $('demora').value = cfg.demora;
+  $('cd-ll').value = cfg.cdLL ? cfg.cdLL.join(', ') : '';
+  $('demora').addEventListener('change', function (e) {
+    var v = +e.target.value;
+    if (!(v >= 0 && v <= 120)) { e.target.value = cfg.demora; return; }
+    cfg.demora = v; guardarLS(CLAVE_CFG, cfg); pintar();
+  });
+  $('cd-ll').addEventListener('change', function (e) {
+    var m = /(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)/.exec(e.target.value || '');
+    if (!e.target.value.trim()) cfg.cdLL = null;
+    else if (m && Math.abs(+m[1]) <= 90 && Math.abs(+m[2]) <= 180) cfg.cdLL = [+m[1], +m[2]];
+    else { e.target.value = cfg.cdLL ? cfg.cdLL.join(', ') : ''; return; }
+    e.target.value = cfg.cdLL ? cfg.cdLL.join(', ') : '';
+    guardarLS(CLAVE_CFG, cfg); pintar();
+  });
   $('obj').addEventListener('change', function (e) {
     if (!/^\d{1,2}:\d{2}$/.test(e.target.value)) { e.target.value = objetivo(new Date()); return; }
     if (sabado()) cfg.objSab = e.target.value; else cfg.objLV = e.target.value;

@@ -37,6 +37,13 @@ Este archivo sirve para retomar el proyecto en un chat nuevo: adjuntalo o pedile
 - Teléfonos: la extensión lee también las columnas M (Teléfonos) y N (Teléfono Móvil) de la base de clientes (`vt.v = 4`); `tel: [{ n, t, movil }]` se publica en la hoja de ruta. Formato de marcado: 10 dígitos → `+549…` (móvil) o `+54…` (fijo). Botón "Llamar al cliente" (`tel:`) en la ficha de la app.
 - Visita no concretada (botón morado): motivos Cerrado / Camino intransitable + comentario. Se guarda en `dias/{día}/noconcretadas/{PAT}/{cod}` (`estado: pendiente`, `intento`). El Tablero muestra aviso morado y la tarjeta "Visitas no concretadas" (App choferes): Confirmar re-visita (`revisita`) o No re-visitar (`norevisitar`) con mensaje. La app avisa al chofer al responder. Si después se carga una visita, deja de estar pendiente. Requiere la regla `noconcretadas` en Firebase.
 
+## Horario proyectado de la ruta (1.6.0)
+- En la línea de tiempo de cada camión, barra gris rayada "plan": desde el inicio de ruta (o la apertura si no salió) sumando el viaje CD → clientes en el orden de la hoja (`n`) → CD, en línea recta × 1,3 a 25 km/h, más la demora por cliente. Fin del plan en la barra y en "Fin est." (naranja si pasa el fin objetivo). Ajustes: "Demora por cliente" (10 min) y "Ubicación CD" (lat, lng; sin ella no suma ida y vuelta). Clientes sin ubicación solo suman demora.
+
+## Check-in y demora por cliente (1.7.0)
+- App: botón azul "Check-in: llegué al cliente" en la ficha; reloj en vivo (ficha y lista). Al marcar Entregado / Parcial / No se entregó / Visita no concretada se cierra y la visita guarda `tCheckin` y `demora` (min). Check-in activo: `ldAppCheckin` en el celular y `dias/{día}/sesiones/{PAT}/checkin = { cod, tIn }`.
+- Tablero: columna "Demora" por cliente (verde ≤ configurada, ámbar ≤ 1,5×, rojo más; "En el cliente N min" en vivo), "Demora por cliente X · actual Y" por camión y en la tarjeta Avance. Ubicación del CD por defecto: -38.889468, -68.103915.
+
 ## Estructura
 - `extension/`: extensión MV3 y el tablero (se publica igual en `docs/`).
   - `bg.js` (service worker: lee Chess y hojas de Google con la sesión del usuario), `lectores.js` (lectores inyectados en Chess/Nextbyn), `base-clientes.js` (base de clientes diaria desde Chess).
