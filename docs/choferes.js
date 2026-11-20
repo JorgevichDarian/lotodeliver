@@ -478,27 +478,77 @@
     }
     el.innerHTML = h;
   }
+  var filtroUs = '';
+  function nz(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
   function pintarChoferes() {
     var el = document.getElementById('ch-users');
     if (!el) return;
-    var u = st.usuarios || {};
-    var lista = Object.keys(u).map(function (k) { return u[k]; }).sort(function (a, b) { return String(a.nombre).localeCompare(b.nombre); });
-    el.innerHTML = (lista.length ? '<ul class="ch-users">' + lista.map(function (x) { return '<li><b>' + esc(x.nombre) + '</b> <span>usuario: ' + esc(x.usuario) + '</span><i class="ch-rol ' + esc(x.rol) + '">' + (x.rol === 'modulador' ? 'Modulador' : 'Chofer') + '</i></li>'; }).join('') + '</ul>' : '<p class="ch-vacio">Cargando…</p>') +
-      '<form id="ch-f-nuevo" class="ch-nuevo"><h4>Nuevo usuario</h4><label>Nombre y apellido<input name="n" required></label><label>Usuario<input name="u" required autocapitalize="none" pattern="[A-Za-z0-9._\\-]+" title="Letras, números, punto, guion"></label>' +
-      '<label>Contraseña<input name="c" required minlength="6"></label><label>Rol<select name="r"><option value="chofer">Chofer</option><option value="modulador">Modulador</option></select></label>' +
-      '<button class="ch-btn" type="submit">Crear usuario</button><p class="ch-sub" id="ch-nuevo-msg">El chofer entra a la app con este usuario y contraseña. Para cambiar una contraseña, por ahora se hace desde la consola de Firebase.</p></form>';
-    document.getElementById('ch-f-nuevo').onsubmit = function (e) {
-      e.preventDefault();
-      var f = e.target, msg = document.getElementById('ch-nuevo-msg'), b = f.querySelector('button');
-      b.disabled = true; msg.textContent = 'Creando…';
-      fb.crearCuenta(f.u.value.trim(), f.c.value).then(function (c) {
-        return fb.put('usuarios/' + c.uid, { nombre: f.n.value.trim(), usuario: LTFirebase.usuarioDe(c.mail), rol: f.r.value, alta: fb.AHORA });
-      }).then(function () {
-        msg.textContent = 'Listo: ' + f.n.value.trim() + ' ya puede entrar con el usuario ' + f.u.value.trim() + '.';
-        f.reset();
-        return fb.get('usuarios').then(function (x) { st.usuarios = x || {}; var m = msg.textContent; pintarChoferes(); document.getElementById('ch-nuevo-msg').textContent = m; });
-      }, function (er) { msg.textContent = er.message; }).then(function () { b.disabled = false; });
+    if (!document.getElementById('ch-us-lista')) {
+      el.innerHTML = '<div class="ch-us-cab"><input type="search" id="ch-us-buscar" placeholder="Buscar por nombre o usuario" aria-label="Buscar usuario"><span class="ch-sub" id="ch-us-cuenta"></span></div>' +
+        '<div id="ch-us-lista"><p class="ch-vacio">Cargando…</p></div>' +
+        '<form id="ch-f-nuevo" class="ch-nuevo"><h4>Nuevo usuario</h4><label>Nombre y apellido<input name="n" required></label><label>Usuario<input name="u" required autocapitalize="none" pattern="[A-Za-z0-9._\-]+" title="Letras, números, punto, guion"></label>' +
+        '<label>Contraseña<input name="c" required minlength="6"></label><label>Rol<select name="r"><option value="chofer">Chofer</option><option value="modulador">Modulador</option></select></label>' +
+        '<button class="ch-btn" type="submit">Crear usuario</button><p class="ch-sub" id="ch-nuevo-msg">El chofer entra a la app con este usuario y contraseña. Para cambiar una contraseña, por ahora se hace desde la consola de Firebase.</p></form>';
+      document.getElementById('ch-us-buscar').oninput = function (e) { filtroUs = e.target.value; pintarListaUsuarios(); };
+      document.getElementById('ch-f-nuevo').onsubmit = crearUsuario;
+    }
+    pintarListaUsuarios();
+  }
+  function recargarUsuarios() { return fb.get('usuarios').then(function (x) { st.usuarios = x || {}; pintarListaUsuarios(); }); }
+  function pintarListaUsuarios() {
+    var cont = document.getElementById('ch-us-lista');
+    if (!cont) return;
+    var u = st.usuarios || {}, yo = fb.sesion() && fb.sesion().uid, q = nz(filtroUs);
+    var todos = Object.keys(u).map(function (k) { var x = Object.assign({}, u[k]); x.uid = k; return x; });
+    var orden = function (a, b) { return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' }); };
+    var ver = todos.filter(function (x) { return !q || nz(x.nombre).indexOf(q) >= 0 || nz(x.usuario).indexOf(q) >= 0; });
+    var mod = ver.filter(function (x) { return x.rol === 'modulador'; }).sort(orden), cho = ver.filter(function (x) { return x.rol !== 'modulador'; }).sort(orden);
+    document.getElementById('ch-us-cuenta').textContent = todos.length + ' usuarios: ' + todos.filter(function (x) { return x.rol === 'modulador'; }).length + ' moduladores y ' + todos.filter(function (x) { return x.rol !== 'modulador'; }).length + ' choferes';
+    var fila = function (x) {
+      var esYo = x.uid === yo;
+      return '<tr><td><b>' + esc(x.nombre) + '</b>' + (esYo ? ' <span class="ch-sub">(vos)</span>' : '') + '</td><td>' + esc(x.usuario) + '</td>' +
+        '<td><select data-rol="' + esc(x.uid) + '"' + (esYo ? ' disabled title="No podés cambiar tu propio rol"' : '') + '><option value="chofer"' + (x.rol !== 'modulador' ? ' selected' : '') + '>Chofer</option><option value="modulador"' + (x.rol === 'modulador' ? ' selected' : '') + '>Modulador</option></select></td>' +
+        '<td class="ch-sub">' + (x.alta ? new Date(x.alta).toLocaleDateString('es-AR') : '—') + '</td>' +
+        '<td>' + (esYo ? '' : '<button type="button" class="ch-us-quitar" data-quitar="' + esc(x.uid) + '" data-nom="' + esc(x.nombre) + '">Quitar acceso</button>') + '</td></tr>';
     };
+    var tabla = function (tit, l) {
+      return l.length ? '<h4 class="ch-us-tit">' + tit + ' (' + l.length + ')</h4><table class="ch-tabla ch-us-tabla"><thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Alta</th><th></th></tr></thead><tbody>' + l.map(fila).join('') + '</tbody></table>' : '';
+    };
+    cont.innerHTML = !todos.length ? '<p class="ch-vacio">Cargando…</p>' : !ver.length ? '<p class="ch-vacio">Ningún usuario coincide con "' + esc(filtroUs) + '".</p>' : tabla('Moduladores', mod) + tabla('Choferes', cho);
+    Array.prototype.forEach.call(cont.querySelectorAll('[data-rol]'), function (s) {
+      s.onchange = function () {
+        var uid = s.getAttribute('data-rol'), rol = s.value;
+        s.disabled = true;
+        fb.patch('usuarios/' + uid, { rol: rol }).then(recargarUsuarios, function (e) { alert('No se pudo cambiar el rol: ' + e.message); recargarUsuarios(); });
+      };
+    });
+    Array.prototype.forEach.call(cont.querySelectorAll('[data-quitar]'), function (b) {
+      b.onclick = function () {
+        if (!confirm('¿Le quitás el acceso a ' + b.getAttribute('data-nom') + '? Ya no va a poder entrar a la app ni al Tablero.\nSi más adelante lo querés de vuelta, crealo con el mismo usuario y contraseña.')) return;
+        b.disabled = true;
+        fb.del('usuarios/' + b.getAttribute('data-quitar')).then(recargarUsuarios, function (e) { alert('No se pudo quitar el acceso: ' + e.message); b.disabled = false; });
+      };
+    });
+  }
+  function crearUsuario(e) {
+    e.preventDefault();
+    var f = e.target, msg = document.getElementById('ch-nuevo-msg'), b = f.querySelector('button');
+    var nombre = f.n.value.trim(), usuario = f.u.value.trim(), clave = f.c.value, rol = f.r.value;
+    b.disabled = true; msg.textContent = 'Creando…';
+    fb.crearCuenta(usuario, clave).catch(function (er) {
+      // La cuenta ya existe (por ejemplo, se creó pero no se llegó a guardar en la lista, o se le había quitado el acceso):
+      // con su contraseña se recupera el uid y se vuelve a dar de alta.
+      if (er.codigo !== 'EMAIL_EXISTS') throw er;
+      return fb.uidDe(usuario, clave).catch(function () {
+        throw new Error('El usuario "' + usuario + '" ya existe, pero la contraseña no coincide. Usá otro nombre de usuario o la contraseña con la que se creó (o borralo en Firebase → Authentication).');
+      });
+    }).then(function (c) {
+      return fb.put('usuarios/' + c.uid, { nombre: nombre, usuario: LTFirebase.usuarioDe(c.mail), rol: rol, alta: fb.AHORA });
+    }).then(function () {
+      f.reset();
+      msg.textContent = 'Listo: ' + nombre + ' ya puede entrar con el usuario ' + usuario + '.';
+      return recargarUsuarios();
+    }).catch(function (er) { msg.textContent = er.message; }).then(function () { b.disabled = false; });
   }
 
   var api = {

@@ -70,6 +70,11 @@
       return auth('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + cfg.apiKey,
         { email: mailDe(usuario), password: String(clave || ''), returnSecureToken: true }).then(function (j) { return { uid: j.localId, mail: j.email }; });
     };
+    // uid de una cuenta existente (con su contraseña), sin cambiar la sesión actual.
+    fb.uidDe = function (usuario, clave) {
+      return auth('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + cfg.apiKey,
+        { email: mailDe(usuario), password: String(clave || ''), returnSecureToken: true }).then(function (j) { return { uid: j.localId, mail: j.email }; });
+    };
     fb.salir = function () { ses = null; guardar(CLAVE_SES, null); };
     fb.token = function () {
       if (!ses) return Promise.reject(errorFirebase({ error: 'TOKEN_EXPIRED' }, 401));

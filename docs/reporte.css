@@ -584,3 +584,12 @@ body.otro-dia .ahora,body.otro-dia .tag.a{display:none}
 .cerrar-jor{display:block;margin-top:6px;border:1px solid #E3B4B1;background:#fff;color:var(--rojo);border-radius:6px;padding:4px 10px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
 .cerrar-jor:hover{background:#FBEDEC}
 .cerrar-jor[disabled]{opacity:.6;cursor:default}
+
+/* usuarios */
+.ch-us-cab{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-bottom:8px}
+.ch-us-cab input{flex:1;min-width:220px;max-width:380px;padding:8px 10px;border:1px solid var(--linea);border-radius:6px;font:inherit}
+.ch-us-tit{margin:14px 0 4px;font-size:15px}
+.ch-us-tabla select{padding:4px 6px;border:1px solid var(--linea);border-radius:5px;font:inherit;font-size:13px;background:#fff}
+.ch-us-quitar{border:1px solid #E3B4B1;background:#fff;color:var(--rojo);border-radius:5px;padding:3px 9px;font:inherit;font-size:12.5px;cursor:pointer}
+.ch-us-quitar:hover{background:#FBEDEC}
+#ch-us-lista{max-height:520px;overflow:auto;margin-bottom:14px}
