@@ -206,7 +206,10 @@
         var fl = Object.keys(facts).map(function (k) { facts[k].importe = Math.round(facts[k].importe); return facts[k]; });
         clientes[x.cod] = {
           n: i + 1, nombre: String(c.cliente).replace(/^\s*\d+\s*-\s*/, ''), domicilio: c.domicilio || '', localidad: c.localidad || '',
-          ll: v && v.ll ? v.ll : null, ventana: textoVentana(v), tel: v && v.tel && v.tel.length ? v.tel : null,
+          // Si este Tablero leyó la base sin teléfonos (por ejemplo, otra PC con la extensión vieja), se
+          // conservan los que ya estaban publicados en vez de borrarlos.
+          ll: v && v.ll ? v.ll : prev[x.cod] && prev[x.cod].ll || null, ventana: v ? textoVentana(v) : prev[x.cod] && prev[x.cod].ventana || textoVentana(v),
+          tel: v && v.tel && v.tel.length ? v.tel : prev[x.cod] && prev[x.cod].tel || null,
           pago: v ? (v.pago === 'cc' ? 'Autorizado (cta. corriente)' : v.pago ? 'Autorizado' : 'No autorizado') : null,
           facturas: fl, importe: Math.round(+c.importe || 0), cajones: Math.round(+c.cajones || 0),
         };
