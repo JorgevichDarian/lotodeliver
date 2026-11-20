@@ -531,6 +531,11 @@
       return e ? { min: e.prom, fuente: 'historial', n: e.n, hist: e.prom } : null;
     },
     demVersion: function () { return demVer; },
+    // Jornada abierta en la app (para que el modulador la cierre si el chofer se olvidó).
+    jornadaAbierta: function (pat) { var s = st.sesiones[pat]; return !!(fb && fb.sesion() && esModulador() && s && s.inicio && !s.fin); },
+    cerrarJornada: function (pat) {
+      return fb.patch('dias/' + DIA + '/sesiones/' + pat, { fin: fb.AHORA, checkin: null, cerradoPor: st.perfil.nombre || fb.sesion().usuario });
+    },
     puedeEditarDemora: function () { return !!(fb && fb.sesion() && esModulador()); },
     guardarDemora: function (cod, min) {
       var p = min == null ? fb.del('demoraManual/' + cod) : fb.put('demoraManual/' + cod, { min: min, por: st.perfil.nombre || fb.sesion().usuario, t: fb.AHORA });

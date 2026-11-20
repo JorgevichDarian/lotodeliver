@@ -179,7 +179,9 @@
   }
 
   // ---------- pantalla principal ----------
+  var abiertoEn = 0;
   function pantallaRuta() {
+    abiertoEn = Date.now();
     var ci = leer('ldAppCheckin', null);
     st.checkin = ci && ci.dia === DIA && ci.pat === st.pat ? ci : null;
     var g = leer('ldAppOptimo', null);
@@ -189,6 +191,12 @@
       st.visitas = v || {};
       Object.keys(st.local).forEach(function (k) { if (st.visitas[k] && st.visitas[k].tLocal === st.local[k].tLocal) delete st.local[k]; });
       pintarTodo();
+    }, errorOyente), fb.escuchar('dias/' + DIA + '/sesiones/' + st.pat + '/fin', function (fin) {
+      // El modulador cerró la jornada desde el Tablero.
+      if (!fin || !st.pat || fin <= abiertoEn) return; // un cierre viejo (antes de abrir el camión) no cuenta
+      var pat = st.pat;
+      dejarCamion();
+      avisar('El modulador cerró la jornada de ' + pat + '. Si seguís repartiendo, elegí el camión de nuevo.', true);
     }, errorOyente), fb.escuchar('dias/' + DIA + '/noconcretadas/' + st.pat, function (v) {
       var antes = st.nc || {};
       st.nc = v || {};
