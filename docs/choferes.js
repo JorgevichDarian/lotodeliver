@@ -56,10 +56,11 @@
     ];
     leerRutas();
     leerViejos();
+    leerDemoras();
     clearInterval(timer);
     timer = setInterval(function () {
       if (sigueHoy && LTFirebase.dia() !== DIA) { DIA = LTFirebase.dia(); st.rutas = null; escuchar(); return; } // cambió el día
-      leerRutas(); leerViejos();
+      leerRutas(); leerViejos(); leerDemoras();
     }, 5 * 6e4);
     if (esModulador()) fb.get('usuarios').then(function (u) { st.usuarios = u || {}; pintarChoferes(); }, function () {});
   }
@@ -68,6 +69,28 @@
     return fb.get('dias/' + DIA + '/rutas').then(function (r) { st.rutas = r || {}; avisarCambio(); }, function (e) { st.error = e.message; pintar(); });
   }
   // Pedidos de descuento de días anteriores que siguen sin respuesta.
+  // ---------- demora estimada por cliente ----------
+  // demoras/{cliente}/{id} = { d (min), dia, pat }: muestras de check-in → entrega.
+  // demoraManual/{cliente} = { min, por, t }: valor fijado por el modulador (manda sobre el historial).
+  var MUESTRAS = 10;
+  function leerDemoras() {
+    if (!fb || !fb.sesion()) return;
+    Promise.all([fb.get('demoras'), fb.get('demoraManual')]).then(function (r) {
+      var est = {};
+      Object.keys(r[0] || {}).forEach(function (cod) {
+        var m = Object.keys(r[0][cod] || {}).map(function (k) { return r[0][cod][k]; }).filter(function (x) { return x && +x.d > 0 && +x.d <= 180; });
+        m.sort(function (a, b) { return String(a.dia).localeCompare(String(b.dia)) || (a.t || 0) - (b.t || 0); });
+        m = m.slice(-MUESTRAS).map(function (x) { return +x.d; });
+        if (!m.length) return;
+        // Promedio sin el valor más alto y el más bajo cuando hay 5 o más (descarta visitas raras).
+        var s = m.slice().sort(function (a, b) { return a - b; });
+        if (s.length >= 5) s = s.slice(1, -1);
+        est[cod] = { prom: s.reduce(function (a, b) { return a + b; }, 0) / s.length, n: m.length };
+      });
+      st.demEst = est; st.demMan = r[1] || {};
+      if (api.alCambiar) api.alCambiar();
+    }, function () { /* sin permiso todavía: se usa la demora general */ });
+  }
   function leerViejos() {
     fb.get('descuentos', '&orderBy=' + encodeURIComponent('"estado"') + '&equalTo=' + encodeURIComponent('"pendiente"')).then(function (v) {
       st.descViejos = {};
@@ -395,6 +418,22 @@
     dia: function () { return DIA; },
     pendientes: function () { return pendientes().length; },
     pendientesNC: function () { return pendientesNC().length; },
+    // Demora estimada de un cliente: { min, fuente: 'manual' | 'historial', n } o null (usar la general).
+    demoraCliente: function (cod) {
+      var m = st.demMan && st.demMan[cod];
+      if (m && +m.min >= 0) return { min: +m.min, fuente: 'manual', por: m.por || '' , n: st.demEst && st.demEst[cod] ? st.demEst[cod].n : 0, hist: st.demEst && st.demEst[cod] ? st.demEst[cod].prom : null };
+      var e = st.demEst && st.demEst[cod];
+      return e ? { min: e.prom, fuente: 'historial', n: e.n, hist: e.prom } : null;
+    },
+    puedeEditarDemora: function () { return !!(fb && fb.sesion() && esModulador()); },
+    guardarDemora: function (cod, min) {
+      var p = min == null ? fb.del('demoraManual/' + cod) : fb.put('demoraManual/' + cod, { min: min, por: st.perfil.nombre || fb.sesion().usuario, t: fb.AHORA });
+      return p.then(function () {
+        st.demMan = st.demMan || {};
+        if (min == null) delete st.demMan[cod]; else st.demMan[cod] = { min: min };
+        if (api.alCambiar) api.alCambiar();
+      });
+    },
     abrir: function (el) { raiz = el; pintar(); },
     alCambiar: null,
     alGps: null,

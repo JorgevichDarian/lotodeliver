@@ -301,18 +301,24 @@
       .sort(function (a, b) { return a.k - b.k || a.i - b.i; }).map(function (x) { return x.c; });
     var ini = e.inicio ? new Date(e.inicio) : null;
     if (!ini || ini.getHours() < 4) ini = aHora(ahora, ventanaApertura(ahora)[0]);
-    var dem = Math.max(0, +cfg.demora || 0), km = 0, sinLl = 0, prev = cfg.cdLL, n = 0;
+    var km = 0, sinLl = 0, prev = cfg.cdLL, n = 0, demTot = 0, fuentes = { manual: 0, historial: 0, general: 0 };
     orden.forEach(function (c) {
       var v = vt && vt.mapa && c.codigo ? vt.mapa[c.codigo] : null;
       if (v && v.ll) { if (prev) km += kmEntre(prev, v.ll); prev = v.ll; } else sinLl++;
+      var d = demoraPlan(c.codigo);
+      demTot += d.min; fuentes[d.fuente]++;
       n++;
     });
     if (cfg.cdLL && prev && prev !== cfg.cdLL) km += kmEntre(prev, cfg.cdLL);
-    var manejo = km / VEL_KMH * 60, total = manejo + n * dem;
-    return { ini: ini, fin: new Date(ini.getTime() + total * 6e4), km: km, manejo: manejo, n: n, sinLl: sinLl, conCD: !!cfg.cdLL };
+    var manejo = km / VEL_KMH * 60, total = manejo + demTot;
+    return { ini: ini, fin: new Date(ini.getTime() + total * 6e4), km: km, manejo: manejo, n: n, sinLl: sinLl, conCD: !!cfg.cdLL, demTot: demTot, fuentes: fuentes };
   }
   function textoPlan(p) {
-    return 'Horario proyectado: sale ' + hhmm(p.ini) + ', termina ~' + hhmm(p.fin) + ' (' + p.n + ' clientes × ' + cfg.demora + ' min + ' +
+    var f = p.fuentes, det = [];
+    if (f.historial) det.push(f.historial + ' según su historial de check-in');
+    if (f.manual) det.push(f.manual + ' con demora fijada a mano');
+    if (f.general) det.push(f.general + ' con la general de ' + cfg.demora + ' min');
+    return 'Horario proyectado: sale ' + hhmm(p.ini) + ', termina ~' + hhmm(p.fin) + ' (' + p.n + ' clientes con ' + Math.round(p.demTot) + ' min de demora: ' + det.join(', ') + '; + ' +
       Math.round(p.km) + ' km a ' + VEL_KMH + ' km/h = ' + Math.round(p.manejo) + ' min de manejo' + (p.conCD ? ', con ida y vuelta al CD' : ', sin el viaje desde y hacia el CD') + ')' +
       (p.sinLl ? '. ' + p.sinLl + ' clientes sin ubicación: solo suman la demora.' : '.');
   }
@@ -746,7 +752,23 @@
   function posOptimo(c) { return !c.est && c.optPos ? '<span class="opt-pos" title="Orden en la ruta óptima que calculó la app">' + c.optPos + '.º en ruta óptima</span>' : ''; }
   // ---------- demora en el cliente (check-in de la app → estado de la visita) ----------
   function fmtMin(m) { return (Math.round(m * 10) / 10).toFixed(1).replace('.', ',').replace(',0', '') + ' min'; }
-  function celdaDemora(c) {
+  // Demora que usa el horario proyectado para un cliente: manual > historial de check-in > general.
+  function demoraPlan(cod) {
+    var d = cod && window.LTChoferes && LTChoferes.demoraCliente ? LTChoferes.demoraCliente(cod) : null;
+    return d ? d : { min: Math.max(0, +cfg.demora || 0), fuente: 'general', n: 0 };
+  }
+  function lineaPlanDemora(c) {
+    if (!modoApp() || !c.codigo) return '';
+    var d = demoraPlan(c.codigo), edita = window.LTChoferes && LTChoferes.puedeEditarDemora && LTChoferes.puedeEditarDemora();
+    var t = d.fuente === 'manual' ? 'fijada ' + fmtMin(d.min) : d.fuente === 'historial' ? 'estimada ' + fmtMin(d.min) : 'general ' + fmtMin(d.min);
+    var tit = d.fuente === 'manual' ? 'Demora fijada a mano' + (d.por ? ' por ' + d.por : '') + (d.hist != null ? '. Según su historial sería ' + fmtMin(d.hist) + ' (' + d.n + ' visitas).' : '.')
+      : d.fuente === 'historial' ? 'Promedio de las últimas ' + d.n + ' visitas con check-in (sin la más larga ni la más corta si hay 5 o más).'
+      : 'Todavía no hay visitas con check-in: se usa la demora general de arriba.';
+    return '<span class="dem-plan ' + d.fuente + '" title="' + esc(tit) + '">' + t + (d.fuente === 'historial' ? ' · ' + d.n + (d.n === 1 ? ' visita' : ' visitas') : '') +
+      (edita ? ' <button type="button" class="dem-edit" data-dem="' + esc(c.codigo) + '" data-nom="' + esc(String(c.cliente).replace(/^\s*\d+\s*-\s*/, '')) + '" data-min="' + (Math.round(d.min * 10) / 10) + '" data-man="' + (d.fuente === 'manual' ? 1 : 0) + '" aria-label="Cambiar la demora de este cliente">✎</button>' : '') + '</span>';
+  }
+  function celdaDemora(c) { return celdaDemoraHoy(c) + lineaPlanDemora(c); }
+  function celdaDemoraHoy(c) {
     if (c.enCliente) return '<span class="dem en" data-ci="' + c.enCliente + '" title="Check-in a las ' + hhmm(c.enCliente) + '">En el cliente <b>' + fmtMin((Date.now() - c.enCliente) / 6e4) + '</b></span>';
     if (c.demora == null) return '<span class="dem nada" title="Sin check-in en la app">—</span>';
     var lim = +cfg.demora || 10;
@@ -1259,6 +1281,19 @@
   window.addEventListener('resize', function () { if (popPat) cerrarPopover(); });
 
   $('contenido').addEventListener('click', function (ev) {
+    var bd = ev.target.closest('button.dem-edit');
+    if (bd) {
+      ev.stopPropagation();
+      var cod = bd.getAttribute('data-dem'), man = bd.getAttribute('data-man') === '1';
+      var v = window.prompt('Demora por visita para ' + bd.getAttribute('data-nom') + ' (minutos).\n' +
+        (man ? 'Dejalo vacío para volver a la estimación automática.' : 'Ahora es ' + bd.getAttribute('data-min') + ' min. Dejalo vacío para no cambiarla.'), man ? bd.getAttribute('data-min') : '');
+      if (v === null) return;
+      v = String(v).trim().replace(',', '.');
+      if (v === '' && !man) return;
+      if (v !== '' && !(+v >= 0 && +v <= 180)) { alert('Poné un número de minutos entre 0 y 180.'); return; }
+      LTChoferes.guardarDemora(cod, v === '' ? null : Math.round(+v * 10) / 10).then(null, function (e) { alert('No se pudo guardar: ' + e.message); });
+      return;
+    }
     var bp = ev.target.closest('button.prio');
     if (bp) {
       ev.stopPropagation();

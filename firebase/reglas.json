@@ -26,6 +26,15 @@
       }
     },
 
+    "demoras": {
+      ".read": "auth != null && root.child('usuarios').child(auth.uid).exists()",
+      "$cod": { ".write": "auth != null && root.child('usuarios').child(auth.uid).exists()" }
+    },
+    "demoraManual": {
+      ".read": "auth != null && root.child('usuarios').child(auth.uid).exists()",
+      "$cod": { ".write": "auth != null && root.child('usuarios').child(auth.uid).child('rol').val() === 'modulador'" }
+    },
+
     "descuentos": {
       ".read": "auth != null && root.child('usuarios').child(auth.uid).exists()",
       ".indexOn": ["dia", "estado"],

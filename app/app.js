@@ -523,7 +523,11 @@
   function cargarVisita(cod, v) {
     var x = { estado: v.estado, motivo: v.motivo || null, nota: v.nota || null, tLocal: Date.now(), t: fb.AHORA, uid: fb.sesion().uid, usuario: fb.sesion().usuario, ll: st.gps.ll || null, acc: st.gps.acc ? Math.round(st.gps.acc) : null };
     var dm = cerrarDemora(cod);
-    if (dm.tCheckin) { x.tCheckin = dm.tCheckin; x.demora = dm.demora; }
+    if (dm.tCheckin) {
+      x.tCheckin = dm.tCheckin; x.demora = dm.demora;
+      // Historial de demoras del cliente: el Tablero lo usa para estimar la demora de las próximas visitas.
+      if (v.estado !== 'modulado') fb.encolar('post', 'demoras/' + cod, { d: dm.demora, dia: DIA, pat: st.pat, t: fb.AHORA });
+    }
     st.local[cod] = x;
     fb.encolar('put', 'dias/' + DIA + '/visitas/' + st.pat + '/' + cod, x);
     cerrarHoja();

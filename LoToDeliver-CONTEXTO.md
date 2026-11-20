@@ -44,6 +44,9 @@ Este archivo sirve para retomar el proyecto en un chat nuevo: adjuntalo o pedile
 - App: botón azul "Check-in: llegué al cliente" en la ficha; reloj en vivo (ficha y lista). Al marcar Entregado / Parcial / No se entregó / Visita no concretada se cierra y la visita guarda `tCheckin` y `demora` (min). Check-in activo: `ldAppCheckin` en el celular y `dias/{día}/sesiones/{PAT}/checkin = { cod, tIn }`.
 - Tablero: columna "Demora" por cliente (verde ≤ configurada, ámbar ≤ 1,5×, rojo más; "En el cliente N min" en vivo), "Demora por cliente X · actual Y" por camión y en la tarjeta Avance. Ubicación del CD por defecto: -38.889468, -68.103915.
 
+## Demora por cliente individual (1.8.0)
+- Cada visita con check-in (entregada o parcial) suma una muestra en `demoras/{cliente}/{id} = { d, dia, pat }`. Estimación del cliente = promedio de las últimas 10 (sin la más alta y la más baja si hay ≥5). `demoraManual/{cliente} = { min, por }` la fija el modulador y manda sobre el historial. El horario proyectado usa manual > historial > general. En la columna Demora: "estimada / fijada / general" con ✎ para fijarla o volver a automática. Requiere reglas `demoras` y `demoraManual`.
+
 ## Estructura
 - `extension/`: extensión MV3 y el tablero (se publica igual en `docs/`).
   - `bg.js` (service worker: lee Chess y hojas de Google con la sesión del usuario), `lectores.js` (lectores inyectados en Chess/Nextbyn), `base-clientes.js` (base de clientes diaria desde Chess).
