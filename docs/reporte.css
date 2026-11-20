@@ -602,3 +602,4 @@ body.otro-dia .ahora,body.otro-dia .tag.a{display:none}
 .ch-d.rech.completado{border-left-color:var(--verde)}.ch-d.rech.ignorado{border-left-color:#9AA1AC}
 .ch-btn.gris{background:#E7EAEE;color:var(--tinta)}
 .ch-btn.gris:hover{background:#DADEE4}
+.ch-desc-card{border-top:3px solid #F6C445}

@@ -369,7 +369,7 @@
       '<p class="ch-link">Enlace de la app para los choferes: <a href="' + APP_URL + '" target="_blank" rel="noopener">' + APP_URL.replace('https://', '') + '</a> <button type="button" class="ch-mini" id="ch-copiar">Copiar</button></p>' +
       '<div class="ch-son-fila"><button type="button" class="ch-son" id="ch-son" aria-pressed="true"></button><button type="button" class="ch-son-prueba" id="ch-son-prueba">Probar</button></div>' +
       '<section class="ch-card ch-ancho ch-nc-card" aria-label="Visitas no concretadas"><h3>Visitas no concretadas</h3><p class="ch-sub">El chofer no pudo concretar la visita. Intentá salvar la entrega (por ejemplo, llamando al cliente) y confirmale si vuelve a pasar.</p><div id="ch-nc"></div></section>' +
-      '<div class="ch-grid"><div class="ch-col"><section class="ch-card" aria-label="Pedidos de descuento"><h3>Pedidos de descuento</h3><div id="ch-desc"></div></section>' +
+      '<div class="ch-grid"><div class="ch-col"><section class="ch-card ch-desc-card" aria-label="Pedidos de descuento"><h3>Pedidos de descuento</h3><div id="ch-desc"></div></section>' +
       '<section class="ch-card ch-rech-card" aria-label="Efectuar rechazos"><h3>Efectuar rechazos</h3><p class="ch-sub">Clientes que el chofer marcó como "No se entregó" en la app. Es solo para tu control: el chofer no ve esta sección.</p><div id="ch-rech"></div></section></div>' +
       '<section class="ch-card" aria-label="Camiones"><h3>Camiones hoy</h3><div id="ch-cams"></div></section></div>' +
       (esModulador() ? '<section class="ch-card ch-ancho" aria-label="Usuarios"><h3>Choferes y moduladores</h3><div id="ch-users"></div></section>' : '');
