@@ -58,6 +58,9 @@ Este archivo sirve para retomar el proyecto en un chat nuevo: adjuntalo o pedile
 - Ficha del cliente: "Pedir descuento" en amarillo debajo de "Visita no concretada", y debajo "Avisar próximo cliente en ruta" (verde WhatsApp). Abre una hoja con hora estimada editable (GPS → cliente en línea recta × 1,3 a 25 km/h, si no la de la ruta óptima, si no +15 min; redondeada a 5 min) y la vista previa; "Abrir WhatsApp" abre wa.me/{549…}?text=… y el chofer lo envía. Mensaje: "Hola, nos comunicamos de Logística Total S.R.L., su pedido está en camino, llegará a las HH:MM. Recordá tener listo $ X y N cajones con sus botellas retornables. Gracias" (sin la parte de cajones si son 0). La hoja de ruta publica ahora `importe` y `cajones` por cliente (de Chess).
 - 1.10.1: cada "Abrir WhatsApp" se registra en `dias/{día}/sesiones/{PAT}/avisos/{cliente} = { tLocal, hora, veces }` (la sesión ahora se escribe con patch para no borrarlos). Tablero: chip "Avisado HH:MM" por cliente, "Avisos WhatsApp N · X de Y visitados fueron avisados" por camión, total en Avance y columna "Avisos WA" en Camiones hoy.
 
+## Estado solo desde la app (1.11.1)
+- Con "Entregas del Tablero: App de choferes", el estado de cada cliente (entregado / parcial / rechazado / pendiente) y la hora de entrega salen solo de lo que marcó el chofer en la app; los estados y horas de Chess (liquidación, rechazos) y de Nextbyn no cuentan como visita. Con Nextbyn como fuente sigue la lógica anterior.
+
 ## Estructura
 - `extension/`: extensión MV3 y el tablero (se publica igual en `docs/`).
   - `bg.js` (service worker: lee Chess y hojas de Google con la sesión del usuario), `lectores.js` (lectores inyectados en Chess/Nextbyn), `base-clientes.js` (base de clientes diaria desde Chess).

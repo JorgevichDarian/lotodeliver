@@ -412,8 +412,11 @@
       c.enCliente = x && x.enCliente ? x.enCliente : null;
       c.aviso = x && x.aviso ? x.aviso : null;
       c.nc = x && x.nc ? x.nc : null;
-      c.est = c.rechazado ? 'rechazado' : c.parcial ? 'parcial' : c.entregado ? 'entregado' : '';
       var s = x && estadoNextbyn(x.estado);
+      // Con la app de choferes como fuente, el estado sale solo de lo que marcó el chofer en la app
+      // (Chess y Nextbyn no cuentan como visita).
+      if (modoApp()) { c.est = s || ''; return c; }
+      c.est = c.rechazado ? 'rechazado' : c.parcial ? 'parcial' : c.entregado ? 'entregado' : '';
       if (s === 'rechazado' || s === 'parcial') c.est = s;
       else if (s === 'entregado' && !c.est) c.est = 'entregado';
       // Sin dato de Nextbyn: estado de la liquidación de Chess (ENTREGADO, ENTREGA PARCIAL, NO VISITADO).
@@ -618,6 +621,7 @@
     guardarLS(CLAVE_OBS, obs);
   }
   function horaEntrega(pat, c) {
+    if (modoApp()) return c.est && c.horaNb ? { t: c.horaNb, fuente: 'app' } : null; // hora en que el chofer marcó la visita
     if (c.horaChess) return { t: c.horaChess, fuente: 'chess', prox: c.proximidad };
     if (c.horaNb) return { t: c.horaNb, fuente: 'nextbyn' };
     var obs = leerLS(CLAVE_OBS, {});
@@ -754,7 +758,7 @@
   var TXT_RIESGO = { riesgo: 'En riesgo', justo: 'Justo', antes: 'Llega antes', ok: 'Pendiente', sin: 'Pendiente' };
   function tituloOT(r) {
     var t = (r.eta && r.st === 'pend' ? TXT_RIESGO[r.riesgo] + '. Llegada estimada ' + hhmm(r.eta) + ' (' + r.pos + '.º en la secuencia; demora de este cliente ' + fmtMin(r.minCli) + ', manejo a ' + VEL_KMH + ' km/h)' : TXT_OT[r.st]) + '. Ventana: ' + (r.f.length ? textoVentana(r.f) : 'sin ventana (el OT se da por cumplido)');
-    if (r.h) t += '. Entrega: ' + hhmm(r.h.t) + (r.h.fuente === 'reporte' ? ' (hora en que el reporte vio el cambio)' : r.h.fuente === 'chess' ? ' (liquidación de Chess' + (r.h.prox ? ', a ' + Math.round(r.h.prox) + ' m del cliente' : '') + ')' : ' (Nextbyn)');
+    if (r.h) t += '. Entrega: ' + hhmm(r.h.t) + (r.h.fuente === 'reporte' ? ' (hora en que el reporte vio el cambio)' : r.h.fuente === 'chess' ? ' (liquidación de Chess' + (r.h.prox ? ', a ' + Math.round(r.h.prox) + ' m del cliente' : '') + ')' : r.h.fuente === 'app' ? ' (marcada por el chofer en la app)' : ' (Nextbyn)');
     if (r.st === 'sinhora') t += '. Ni la liquidación de Chess ni Nextbyn informan la hora de esta entrega.';
     return t;
   }
@@ -1052,7 +1056,8 @@
         '<div class="estado"><b><i></i>' + esc(e.txt) + '</b>' +
         e.alertas.filter(function (a) { return a.indexOf('Cerró la jornada') !== 0; }).map(function (a) { return '<span class="al">' + esc(a) + '</span>'; }).join('') +
         (e.aviso ? '<span class="al sec">' + esc(e.aviso) + '</span>' : '') +
-        (e.estado === 'ABIERTA' && e.pendientes ? '<button type="button" class="prio" data-prio="' + esc(e.patente) + '" aria-haspopup="dialog">Prioridad pedidos pendientes <span>' + cantidadPendientes(e) + '</span></button>' : '') + '</div>' +
+        (e.estado === 'ABIERTA' && e.pendientes ? '<button type="button" class="prio" data-prio="' + esc(e.patente) + '" aria-haspopup="dialog">Prioridad pedidos pendientes <span>' + cantidadPendientes(e) + '</span></button>' : '') +
+        (modoApp() && window.LTChoferes && LTChoferes.jornadaAbierta && LTChoferes.jornadaAbierta(String(e.patente).toUpperCase()) ? '<button type="button" class="cerrar-jor" data-cj="' + esc(String(e.patente).toUpperCase()) + '" data-pend="' + (e.pendientes || 0) + '" title="Cierra la jornada de este camión en la app de choferes, por si el chofer no lo hizo">Cerrar jornada</button>' : '') + '</div>' +
         lineaDelDia(e, E, ahora) +
         '<div class="c-cli n"><span class="big">' + e.hechos + '</span><span style="color:var(--tenue)">/' + e.total + '</span>' +
         '<div class="avance" title="' + e.entregados + ' entregados, ' + e.parciales + ' parciales, ' + e.rechazos + ' rechazos, ' + e.pendientes + ' pendientes"><i class="e" style="width:' + ancho(e.entregados) + '%"></i><i class="p" style="width:' + ancho(e.parciales) + '%"></i><i class="r" style="width:' + ancho(e.rechazos) + '%"></i></div>' +
@@ -1106,7 +1111,7 @@
         var r = evaluarOT(pat, c, ahora);
         clientes.push({ fecha: fecha, patente: pat, codigo: c.codigo || '', cliente: String(c.cliente).replace(/^\s*\d+\s*-\s*/, ''),
           ventana: r.f.length ? textoVentana(r.f) : r.nota || 'Sin ventana', hora: r.h ? hhmm(r.h.t) : '',
-          resultado: TXT_OT[r.st], fuente: r.h ? ({ chess: 'Liquidación Chess', nextbyn: 'Nextbyn', reporte: 'Visto por el reporte' })[r.h.fuente] : '',
+          resultado: TXT_OT[r.st], fuente: r.h ? ({ chess: 'Liquidación Chess', nextbyn: 'Nextbyn', reporte: 'Visto por el reporte', app: 'App de choferes' })[r.h.fuente] : '',
           prox: r.h && r.h.prox != null ? Math.round(r.h.prox) : '' });
       });
     });
@@ -1311,6 +1316,15 @@
   window.addEventListener('resize', function () { if (popPat) cerrarPopover(); });
 
   $('contenido').addEventListener('click', function (ev) {
+    var bcj = ev.target.closest('button.cerrar-jor');
+    if (bcj) {
+      ev.stopPropagation();
+      var pj = bcj.getAttribute('data-cj'), np = +bcj.getAttribute('data-pend') || 0;
+      if (!confirm('¿Cerrás la jornada de ' + pj + ' en la app de choferes?' + (np ? '\nQuedan ' + np + ' clientes pendientes: van a quedar sin visitar.' : '') + '\nSi el chofer sigue usando la app, le va a avisar y va a tener que volver a abrirla.')) return;
+      bcj.disabled = true; bcj.textContent = 'Cerrando…';
+      LTChoferes.cerrarJornada(pj).then(null, function (e) { alert('No se pudo cerrar la jornada: ' + e.message); bcj.disabled = false; bcj.textContent = 'Cerrar jornada'; });
+      return;
+    }
     var bd = ev.target.closest('button.dem-edit');
     if (bd) {
       ev.stopPropagation();
