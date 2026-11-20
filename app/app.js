@@ -560,11 +560,27 @@
       var est = d.id ? d.estado : 'sinenviar';
       return '<li class="desc ' + est + '"><div class="d-cab"><b>' + esc(d.nombreCliente || d.cliente) + '</b><span class="pill ' + est + '">' + { pendiente: 'Esperando respuesta', aprobado: 'Aprobado', rechazado: 'Rechazado', sinenviar: 'Sin enviar' }[est] + '</span></div>' +
         '<p>Factura ' + esc(d.factura) + ' · SKU ' + esc(d.sku) + ' · ' + esc(d.cantidad) + ' u.</p><p class="mot">' + esc(d.motivo) + (d.detalle ? ': ' + esc(d.detalle) : '') + '</p>' +
+        (d.monto != null && d.estado !== 'pendiente' ? '<p class="monto">Monto a descontar: <b>$ ' + Number(d.monto).toLocaleString('es-AR', { maximumFractionDigits: 2 }) + '</b></p>' : '') +
         (d.respuesta ? '<p class="resp"><b>' + esc(d.respondio || 'Modulador') + ':</b> ' + esc(d.respuesta) + '</p>' : '') +
+        (d.adjunto && d.id ? '<button type="button" class="btn sec ancho d-pdf" data-pdf="' + esc(d.id) + '">📎 Ver ' + esc(d.adjunto.nombre || 'PDF') + '</button>' : '') +
         '<p class="hora">Pedido a las ' + hhmm(d.tLocal) + (d.tResp ? ' · respondido a las ' + hhmm(d.tResp) : '') + '</p></li>';
     }).join('') + '</ul>';
     v.innerHTML = h;
     document.getElementById('b-nuevo-desc').onclick = function () { formDescuento({}); };
+    Array.prototype.forEach.call(v.querySelectorAll('[data-pdf]'), function (b) {
+      b.onclick = function () {
+        var txt = b.textContent; b.disabled = true; b.textContent = 'Abriendo…';
+        fb.get('adjuntos/' + b.getAttribute('data-pdf')).then(function (a) {
+          if (!a || !a.datos) throw new Error('No se encontró el archivo.');
+          var bin = atob(a.datos), u8 = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+          var url = URL.createObjectURL(new Blob([u8], { type: 'application/pdf' })), l = document.createElement('a');
+          l.href = url; l.target = '_blank'; l.rel = 'noopener'; l.download = a.nombre || 'descuento.pdf';
+          document.body.appendChild(l); l.click(); l.remove();
+          setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+        }).catch(function (e) { avisar('No se pudo abrir el PDF: ' + e.message, true); }).then(function () { b.disabled = false; b.textContent = txt; });
+      };
+    });
   }
   function formDescuento(pre) {
     var lista = clientes();

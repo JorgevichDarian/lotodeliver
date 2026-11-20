@@ -17,7 +17,7 @@
     <div>
     <span class="empresa">Logística Total SRL</span>
     <h1>Tablero de ruta <span class="lotod">LoToDeliver</span></h1>
-    <p class="donde"><span id="hoy">CD Neuquén</span> <span class="ver">v1.8.1</span></p>
+    <p class="donde"><span id="hoy">CD Neuquén</span> <span class="ver">v1.9.0</span></p>
     </div>
   </div>
   <div class="fuentes" aria-label="Fuentes de datos">
@@ -129,6 +129,10 @@
     &quot;demoras&quot;: {
       &quot;.read&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot;,
       &quot;$cod&quot;: { &quot;.write&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot; }
+    },
+    &quot;adjuntos&quot;: {
+      &quot;.read&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot;,
+      &quot;$id&quot;: { &quot;.write&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).child(&#x27;rol&#x27;).val() === &#x27;modulador&#x27;&quot; }
     },
     &quot;demoraManual&quot;: {
       &quot;.read&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot;,

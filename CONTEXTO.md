@@ -47,6 +47,10 @@ Este archivo sirve para retomar el proyecto en un chat nuevo: adjuntalo o pedile
 ## Demora por cliente individual (1.8.0)
 - Cada visita con check-in (entregada o parcial) suma una muestra en `demoras/{cliente}/{id} = { d, dia, pat }`. Estimación del cliente = promedio de las últimas 10 (sin la más alta y la más baja si hay ≥5). `demoraManual/{cliente} = { min, por }` la fija el modulador y manda sobre el historial. El horario proyectado usa manual > historial > general. En la columna Demora: "estimada / fijada / general" con ✎ para fijarla o volver a automática. Requiere reglas `demoras` y `demoraManual`.
 
+## Descuentos con monto y PDF; aviso sonoro (1.9.0)
+- Responder un descuento pide "Monto a descontar" (obligatorio para aprobar, puede ser 0; al rechazar sin monto queda 0) y permite adjuntar un PDF (≤ 5 MB) que se guarda en base64 en `adjuntos/{id}`; el descuento guarda `monto` y `adjunto: { nombre, tam }`. El chofer ve el monto y abre el PDF desde la app. Requiere regla `adjuntos`.
+- Aviso sonoro en el Tablero (Web Audio, dos notas suaves, ~0,7 s) cuando entra un descuento o una visita no concretada nueva; botón para activar/desactivar y Probar en App choferes (`ldReporteSonido`).
+
 ## Estructura
 - `extension/`: extensión MV3 y el tablero (se publica igual en `docs/`).
   - `bg.js` (service worker: lee Chess y hojas de Google con la sesión del usuario), `lectores.js` (lectores inyectados en Chess/Nextbyn), `base-clientes.js` (base de clientes diaria desde Chess).

@@ -208,3 +208,5 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--naranja)
 .ci-activo .reloj-ci{font:700 28px/1 var(--cond);margin-left:auto;font-variant-numeric:tabular-nums}
 .ci-cancelar{flex-basis:100%;background:none;border:0;padding:0;text-align:left;color:#1D4F96;text-decoration:underline;font:inherit;font-size:13px;font-weight:500}
 .cli-ci{display:block;margin-top:3px;font-size:13.5px;font-weight:700;color:#2F72D0}
+.desc .monto{margin:6px 0 0;font-size:15px}
+.desc .d-pdf{margin-top:8px}

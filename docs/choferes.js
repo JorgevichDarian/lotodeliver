@@ -36,6 +36,7 @@
   }
   function escuchar() {
     cerrar();
+    st.descOk = st.diaOk = false; conocidos = null; // el aviso sonoro arranca de cero
     var d = 'dias/' + DIA + '/';
     var err = function (e) { st.error = e.message; pintar(); };
     // Una sola conexión en vivo para todo el día. El navegador abre como mucho 6 conexiones a la vez
@@ -47,12 +48,13 @@
       fb.escuchar('dias/' + DIA, function (v) {
         v = v || {};
         var cv = cambio('visitas', v.visitas), cs = cambio('sesiones', v.sesiones), co = cambio('optimo', v.optimo), cn = cambio('nc', v.noconcretadas), cg = cambio('gps', v.gps);
+        st.diaOk = true;
         st.visitas = v.visitas || {}; st.sesiones = v.sesiones || {}; st.optimo = v.optimo || {}; st.nc = v.noconcretadas || {}; st.gps = v.gps || {};
         if (cn) { pintarBadge(); pintarNC(); }
         if (cg) { if (api.alGps) api.alGps(); pintarCamiones(); }
         if (cv || cs || co || cn) avisarCambio();
       }, err),
-      fb.escuchar('descuentos', function (v) { st.desc = v || {}; pintarBadge(); pintarDescuentos(); }, err, '&orderBy=' + encodeURIComponent('"dia"') + '&equalTo=' + encodeURIComponent('"' + DIA + '"')),
+      fb.escuchar('descuentos', function (v) { st.desc = v || {}; st.descOk = true; pintarBadge(); pintarDescuentos(); }, err, '&orderBy=' + encodeURIComponent('"dia"') + '&equalTo=' + encodeURIComponent('"' + DIA + '"')),
     ];
     leerRutas();
     leerViejos();
@@ -227,7 +229,47 @@
   }
 
   // ---------- pestaña App choferes ----------
+  // ---------- aviso sonoro: un "ding" corto y suave cuando entra un descuento o una visita no concretada ----------
+  var CLAVE_SON = 'ldReporteSonido', sonidoOn = (function () { try { return localStorage.getItem(CLAVE_SON) !== '0'; } catch (e) { return true; } })();
+  var actx = null, conocidos = null;
+  function contexto() {
+    if (!actx) { var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  // El navegador deja sonar solo después de un clic en la página: se "despierta" el audio con el primero.
+  document.addEventListener('pointerdown', function () { if (sonidoOn) contexto(); }, { once: true, capture: true });
+  function ding() {
+    if (!sonidoOn) return;
+    var c = contexto();
+    if (!c) return;
+    var t0 = c.currentTime + 0.02, gral = c.createGain();
+    gral.gain.value = 0.18; gral.connect(c.destination);
+    [[659.25, 0], [987.77, 0.13]].forEach(function (n) { // mi5 → si5: dos notas suaves, ~0,7 s en total
+      var o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.value = n[0];
+      g.gain.setValueAtTime(0.0001, t0 + n[1]);
+      g.gain.exponentialRampToValueAtTime(1, t0 + n[1] + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + n[1] + 0.55);
+      o.connect(g); g.connect(gral);
+      o.start(t0 + n[1]); o.stop(t0 + n[1] + 0.6);
+    });
+  }
+  // Suena solo por pedidos nuevos (no al abrir el Tablero ni por los que ya estaban).
+  function revisarNuevos() {
+    if (!esModulador() || !st.descOk || !st.diaOk) return;
+    var ids = Object.keys(st.desc || {}).filter(function (k) { return st.desc[k] && st.desc[k].estado === 'pendiente'; }).map(function (k) { return 'd:' + k; }).concat(pendientesNC().map(function (n) { return 'n:' + n.pat + '/' + n.cod + '/' + (n.tLocal || ''); }));
+    if (conocidos === null) { conocidos = {}; ids.forEach(function (i) { conocidos[i] = 1; }); return; }
+    var hay = ids.some(function (i) { return !conocidos[i]; });
+    ids.forEach(function (i) { conocidos[i] = 1; });
+    if (hay) ding();
+  }
+  function pintarSonido() {
+    var b = document.getElementById('ch-son');
+    if (b) { b.textContent = sonidoOn ? '🔔 Sonido de avisos: activado' : '🔕 Sonido de avisos: desactivado'; b.setAttribute('aria-pressed', String(sonidoOn)); }
+  }
   function pintarBadge() {
+    revisarNuevos();
     var t = document.getElementById('tab-choferes');
     if (!t) return;
     var n = pendientes().length, m = pendientesNC().length;
@@ -318,6 +360,7 @@
       '<div class="ch-acc"><label class="ch-fuente">Entregas del Tablero: <select id="ch-fuente"><option value="app">App de choferes</option><option value="nextbyn">Nextbyn</option></select></label>' +
       '<button type="button" class="ch-btn sec" id="ch-salir">Salir</button></div></div>' +
       '<p class="ch-link">Enlace de la app para los choferes: <a href="' + APP_URL + '" target="_blank" rel="noopener">' + APP_URL.replace('https://', '') + '</a> <button type="button" class="ch-mini" id="ch-copiar">Copiar</button></p>' +
+      '<div class="ch-son-fila"><button type="button" class="ch-son" id="ch-son" aria-pressed="true"></button><button type="button" class="ch-son-prueba" id="ch-son-prueba">Probar</button></div>' +
       '<section class="ch-card ch-ancho ch-nc-card" aria-label="Visitas no concretadas"><h3>Visitas no concretadas</h3><p class="ch-sub">El chofer no pudo concretar la visita. Intentá salvar la entrega (por ejemplo, llamando al cliente) y confirmale si vuelve a pasar.</p><div id="ch-nc"></div></section>' +
       '<div class="ch-grid"><section class="ch-card" aria-label="Pedidos de descuento"><h3>Pedidos de descuento</h3><div id="ch-desc"></div></section>' +
       '<section class="ch-card" aria-label="Camiones"><h3>Camiones hoy</h3><div id="ch-cams"></div></section></div>' +
@@ -326,7 +369,30 @@
     document.getElementById('ch-fuente').onchange = function (e) { cfg.fuente = e.target.value; guardar(CLAVE, cfg); if (api.alCambiar) api.alCambiar(true); };
     document.getElementById('ch-salir').onclick = function () { cerrar(); fb.salir(); st.perfil = null; st.rutas = null; if (api.alCambiar) api.alCambiar(true); pintar(); };
     document.getElementById('ch-copiar').onclick = function () { try { navigator.clipboard.writeText(APP_URL); this.textContent = 'Copiado'; } catch (e) { /* sin portapapeles */ } };
-    pintarNC(); pintarDescuentos(); pintarCamiones(); pintarChoferes();
+    pintarNC(); pintarDescuentos(); pintarCamiones(); pintarChoferes(); pintarSonido();
+    var bs = document.getElementById('ch-son'), bp = document.getElementById('ch-son-prueba');
+    if (bs) bs.onclick = function () { sonidoOn = !sonidoOn; try { localStorage.setItem(CLAVE_SON, sonidoOn ? '1' : '0'); } catch (e) { /* sin almacenamiento */ } pintarSonido(); if (sonidoOn) ding(); };
+    if (bp) bp.onclick = function () { var a = sonidoOn; sonidoOn = true; ding(); sonidoOn = a; };
+  }
+  // ---------- descuentos: monto a descontar (obligatorio) y PDF adjunto ----------
+  var adjSel = {}, montoSel = {}, MAX_PDF = 5 * 1024 * 1024;
+  function plata(n) { return '$ ' + Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 }); }
+  function leerMonto(txt) {
+    txt = String(txt == null ? '' : txt).trim().replace(/\$|\s/g, '');
+    if (!txt) return null;
+    if (/,\d{1,2}$/.test(txt)) txt = txt.replace(/\./g, '').replace(',', '.'); else txt = txt.replace(/,/g, '');
+    var n = Number(txt);
+    return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
+  }
+  function verAdjunto(id, nombre) {
+    var win = window.open('', '_blank');
+    fb.get('adjuntos/' + id).then(function (a) {
+      if (!a || !a.datos) throw new Error('No se encontró el archivo.');
+      var bin = atob(a.datos), u8 = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      var url = URL.createObjectURL(new Blob([u8], { type: 'application/pdf' }));
+      if (win) win.location = url; else { var l = document.createElement('a'); l.href = url; l.download = nombre || 'adjunto.pdf'; l.click(); }
+    }).catch(function (e) { if (win) win.close(); alert('No se pudo abrir el PDF: ' + e.message); });
   }
   function pintarDescuentos() {
     var el = document.getElementById('ch-desc');
@@ -336,24 +402,56 @@
     var item = function (d, abierto) {
       return '<li class="ch-d ' + d.estado + '"><div class="ch-d-cab">' + chapa(d.pat) + '<div><b>' + esc(d.cliente + ' · ' + (d.nombreCliente || '')) + '</b><span>' + esc(d.nombre || d.usuario) + ' · ' + (d.dia !== DIA ? d.dia.split('-').reverse().join('/') + ' ' : '') + hhmm(d.tLocal) + '</span></div>' +
         (abierto ? '' : '<span class="ch-pill ' + d.estado + '">' + (d.estado === 'aprobado' ? 'Aprobado' : 'Rechazado') + '</span>') + '</div>' +
-        '<dl><dt>Factura</dt><dd>' + esc(d.factura) + '</dd><dt>SKU</dt><dd>' + esc(d.sku) + '</dd><dt>Cantidad</dt><dd>' + esc(d.cantidad) + '</dd><dt>Motivo</dt><dd>' + esc(d.motivo) + (d.detalle ? ': ' + esc(d.detalle) : '') + '</dd></dl>' +
-        (abierto ? '<div class="ch-resp"><textarea rows="2" placeholder="Respuesta para el chofer (opcional)" data-r="' + esc(d.id) + '"></textarea>' +
+        '<dl><dt>Factura</dt><dd>' + esc(d.factura) + '</dd><dt>SKU</dt><dd>' + esc(d.sku) + '</dd><dt>Cantidad</dt><dd>' + esc(d.cantidad) + '</dd><dt>Motivo</dt><dd>' + esc(d.motivo) + (d.detalle ? ': ' + esc(d.detalle) : '') + '</dd>' +
+        (!abierto && d.monto != null ? '<dt>A descontar</dt><dd><b>' + plata(d.monto) + '</b></dd>' : '') +
+        (!abierto && d.adjunto ? '<dt>Adjunto</dt><dd><button type="button" class="ch-adj-ver" data-ver="' + esc(d.id) + '" data-nom="' + esc(d.adjunto.nombre || '') + '">📎 ' + esc(d.adjunto.nombre || 'PDF') + '</button></dd>' : '') + '</dl>' +
+        (abierto ? '<div class="ch-resp"><div class="ch-monto"><label><em>Monto a descontar <b>*</b></em><span><i>$</i><input inputmode="decimal" autocomplete="off" placeholder="0" data-m="' + esc(d.id) + '" value="' + esc(montoSel[d.id] || '') + '"></span></label>' +
+          '<label class="ch-adj">Adjuntar PDF (opcional)<input type="file" accept="application/pdf,.pdf" data-f="' + esc(d.id) + '"><span class="ch-adj-nom" data-fn="' + esc(d.id) + '">' + (adjSel[d.id] ? '📎 ' + esc(adjSel[d.id].nombre) + ' <button type="button" class="ch-adj-quitar" data-fq="' + esc(d.id) + '">Quitar</button>' : 'Ningún archivo') + '</span></label></div>' +
+          '<textarea rows="2" placeholder="Respuesta para el chofer (opcional)" data-r="' + esc(d.id) + '"></textarea>' +
           '<div><button type="button" class="ch-btn ok" data-ok="' + esc(d.id) + '">Aprobar</button><button type="button" class="ch-btn malo" data-no="' + esc(d.id) + '">Rechazar</button></div></div>'
           : (d.respuesta ? '<p class="ch-r">' + esc(d.respondio || '') + ': ' + esc(d.respuesta) + '</p>' : '') + '<p class="ch-sub">Respondido ' + hhmm(d.tResp) + '</p>') + '</li>';
     };
     // Si hay una respuesta a medio escribir, no se redibuja encima.
-    var activo = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('data-r');
+    var activo = document.activeElement && document.activeElement.getAttribute && (document.activeElement.getAttribute('data-r') || document.activeElement.getAttribute('data-m'));
     if (activo && pend.some(function (d) { return d.id === activo; })) return;
     el.innerHTML = (pend.length ? '<ul class="ch-lista">' + pend.map(function (d) { return item(d, true); }).join('') + '</ul>' : '<p class="ch-vacio">No hay pedidos esperando respuesta.</p>') +
       (resp.length ? '<details class="ch-hechos"><summary>Respondidos hoy (' + resp.length + ')</summary><ul class="ch-lista">' + resp.map(function (d) { return item(d, false); }).join('') + '</ul></details>' : '');
+    Array.prototype.forEach.call(el.querySelectorAll('[data-ver]'), function (b) { b.onclick = function () { verAdjunto(b.getAttribute('data-ver'), b.getAttribute('data-nom')); }; });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-m]'), function (i) { i.oninput = function () { montoSel[i.getAttribute('data-m')] = i.value; i.classList.remove('falta'); }; });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-fq]'), function (b) { b.onclick = function (ev) { ev.preventDefault(); delete adjSel[b.getAttribute('data-fq')]; pintarDescuentos(); }; });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-f]'), function (inp) {
+      inp.onchange = function () {
+        var id = inp.getAttribute('data-f'), f = inp.files && inp.files[0];
+        if (!f) return;
+        if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) { alert('Solo se pueden adjuntar archivos PDF.'); inp.value = ''; return; }
+        if (f.size > MAX_PDF) { alert('El PDF pesa ' + (f.size / 1048576).toFixed(1) + ' MB. El máximo es 5 MB.'); inp.value = ''; return; }
+        var r = new FileReader();
+        r.onload = function () {
+          adjSel[id] = { nombre: f.name, tam: f.size, datos: String(r.result).split(',')[1] };
+          var nom = el.querySelector('[data-fn="' + id + '"]');
+          if (nom) {
+            nom.innerHTML = '📎 ' + esc(f.name) + ' <button type="button" class="ch-adj-quitar" data-fq="' + esc(id) + '">Quitar</button>';
+            nom.querySelector('[data-fq]').onclick = function (ev) { ev.preventDefault(); delete adjSel[id]; inp.value = ''; nom.textContent = 'Ningún archivo'; };
+          }
+        };
+        r.readAsDataURL(f);
+      };
+    });
     Array.prototype.forEach.call(el.querySelectorAll('[data-ok],[data-no]'), function (b) {
       b.onclick = function () {
         var id = b.getAttribute('data-ok') || b.getAttribute('data-no'), ok = b.hasAttribute('data-ok');
         var txt = (el.querySelector('[data-r="' + id + '"]') || {}).value || '';
+        var im = el.querySelector('[data-m="' + id + '"]'), monto = leerMonto(im && im.value);
+        if (monto == null && ok) { if (im) { im.classList.add('falta'); im.focus(); } alert('Completá el monto a descontar (puede ser 0).'); return; }
+        if (monto == null) monto = 0; // al rechazar, sin monto es $ 0
         if (!ok && !txt.trim() && !confirm('¿Rechazás el pedido sin escribir el motivo para el chofer?')) return;
         b.disabled = true;
-        fb.patch('descuentos/' + id, { estado: ok ? 'aprobado' : 'rechazado', respuesta: txt.trim() || null, respondio: st.perfil.nombre || fb.sesion().usuario, tResp: fb.AHORA, uidResp: fb.sesion().uid })
-          .then(function () { delete st.descViejos[id]; leerViejos(); }, function (e) { alert('No se pudo guardar la respuesta: ' + e.message); b.disabled = false; });
+        var adj = adjSel[id];
+        var subir = adj ? fb.put('adjuntos/' + id, { nombre: adj.nombre, tam: adj.tam, tipo: 'application/pdf', datos: adj.datos, por: st.perfil.nombre || fb.sesion().usuario, t: fb.AHORA }) : Promise.resolve();
+        subir.then(function () {
+          return fb.patch('descuentos/' + id, { estado: ok ? 'aprobado' : 'rechazado', monto: monto, adjunto: adj ? { nombre: adj.nombre, tam: adj.tam } : null,
+            respuesta: txt.trim() || null, respondio: st.perfil.nombre || fb.sesion().usuario, tResp: fb.AHORA, uidResp: fb.sesion().uid });
+        }).then(function () { delete adjSel[id]; delete montoSel[id]; delete st.descViejos[id]; leerViejos(); }, function (e) { alert('No se pudo guardar la respuesta: ' + e.message); b.disabled = false; });
       };
     });
   }
