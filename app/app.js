@@ -14,7 +14,7 @@
   function delDia() { return DIA === HOY ? 'de hoy' : 'del ' + fechaCorta(DIA); }
 
   var MOTIVOS_NO = ['Cerrado', 'Sin dinero', 'Rechaza la mercadería', 'No hizo pedido', 'No se encontró la dirección', 'Otro'];
-  var MOTIVOS_DESC = ['Producto vencido o dañado', 'Precio mal facturado', 'Faltante de mercadería', 'Acuerdo comercial', 'Otro'];
+  var MOTIVOS_DESC = ['No estaba en la carga - Informado', 'No estaba en la carga - NO Informado', 'Producto roto', 'Producto vencido', 'Producto no pedido por el cliente', 'Devolución'];
   var TXT_EST = { entregado: 'Entregado', parcial: 'Entrega parcial', modulado: 'No entregado' };
 
   var st = {
@@ -591,7 +591,7 @@
       '<fieldset class="campo skus"><legend>SKU y cantidad (bultos)</legend><div id="f-skus"></div>' +
       '<button type="button" class="btn sec ancho" id="b-mas-sku">+ Agregar otro SKU de esta factura</button></fieldset>' +
       '<label class="campo">Motivo<select name="motivo" required><option value="">Elegí el motivo</option>' + MOTIVOS_DESC.map(function (m) { return '<option>' + esc(m) + '</option>'; }).join('') + '</select></label>' +
-      '<label class="campo">Detalle<textarea name="detalle" rows="2" placeholder="Opcional (obligatorio si el motivo es Otro)"></textarea></label>' +
+      '<label class="campo">Detalle<textarea name="detalle" rows="2" placeholder="Opcional"></textarea></label>' +
       '<button class="btn prim grande ancho" type="submit">Enviar pedido</button></form>';
     abrirHoja(h);
     var f = document.getElementById('f-desc');
