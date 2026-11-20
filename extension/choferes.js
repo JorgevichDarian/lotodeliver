@@ -51,6 +51,7 @@
         st.diaOk = true;
         st.visitas = v.visitas || {}; st.sesiones = v.sesiones || {}; st.optimo = v.optimo || {}; st.nc = v.noconcretadas || {}; st.gps = v.gps || {};
         if (cn) { pintarBadge(); pintarNC(); }
+        if (cv) { pintarBadge(); pintarRechazos(); }
         if (cg) { if (api.alGps) api.alGps(); pintarCamiones(); }
         if (cv || cs || co || cn) avisarCambio();
       }, err),
@@ -263,7 +264,7 @@
   // Suena solo por pedidos nuevos (no al abrir el Tablero ni por los que ya estaban).
   function revisarNuevos() {
     if (!esModulador() || !st.descOk || !st.diaOk) return;
-    var ids = Object.keys(st.desc || {}).filter(function (k) { return st.desc[k] && st.desc[k].estado === 'pendiente'; }).map(function (k) { return 'd:' + k; }).concat(pendientesNC().map(function (n) { return 'n:' + n.pat + '/' + n.cod + '/' + (n.tLocal || ''); }));
+    var ids = pendientesRech().map(function (r) { return 'r:' + r.pat + '/' + r.cod + '/' + (r.tLocal || ''); }).concat(Object.keys(st.desc || {}).filter(function (k) { return st.desc[k] && st.desc[k].estado === 'pendiente'; }).map(function (k) { return 'd:' + k; }).concat(pendientesNC().map(function (n) { return 'n:' + n.pat + '/' + n.cod + '/' + (n.tLocal || ''); })));
     if (conocidos === null) { conocidos = {}; ids.forEach(function (i) { conocidos[i] = 1; }); return; }
     var hay = ids.some(function (i) { return !conocidos[i]; });
     ids.forEach(function (i) { conocidos[i] = 1; });
@@ -277,9 +278,10 @@
     revisarNuevos();
     var t = document.getElementById('tab-choferes');
     if (!t) return;
-    var n = pendientes().length, m = pendientesNC().length;
+    var n = pendientes().length, m = pendientesNC().length, rq = pendientesRech().length;
     t.innerHTML = 'App choferes' + (m ? ' <i class="ch-badge nc" title="' + m + ' visitas no concretadas esperando respuesta">' + m + '</i>' : '') +
-      (n ? ' <i class="ch-badge" title="' + n + ' pedidos de descuento esperando respuesta">' + n + '</i>' : '');
+      (n ? ' <i class="ch-badge" title="' + n + ' pedidos de descuento esperando respuesta">' + n + '</i>' : '') +
+      (rq ? ' <i class="ch-badge rech" title="' + rq + ' rechazos por efectuar">' + rq + '</i>' : '');
   }
   function pendientes() {
     var todos = Object.assign({}, st.descViejos, st.desc);
@@ -367,14 +369,15 @@
       '<p class="ch-link">Enlace de la app para los choferes: <a href="' + APP_URL + '" target="_blank" rel="noopener">' + APP_URL.replace('https://', '') + '</a> <button type="button" class="ch-mini" id="ch-copiar">Copiar</button></p>' +
       '<div class="ch-son-fila"><button type="button" class="ch-son" id="ch-son" aria-pressed="true"></button><button type="button" class="ch-son-prueba" id="ch-son-prueba">Probar</button></div>' +
       '<section class="ch-card ch-ancho ch-nc-card" aria-label="Visitas no concretadas"><h3>Visitas no concretadas</h3><p class="ch-sub">El chofer no pudo concretar la visita. Intentá salvar la entrega (por ejemplo, llamando al cliente) y confirmale si vuelve a pasar.</p><div id="ch-nc"></div></section>' +
-      '<div class="ch-grid"><section class="ch-card" aria-label="Pedidos de descuento"><h3>Pedidos de descuento</h3><div id="ch-desc"></div></section>' +
+      '<div class="ch-grid"><div class="ch-col"><section class="ch-card" aria-label="Pedidos de descuento"><h3>Pedidos de descuento</h3><div id="ch-desc"></div></section>' +
+      '<section class="ch-card ch-rech-card" aria-label="Efectuar rechazos"><h3>Efectuar rechazos</h3><p class="ch-sub">Clientes que el chofer marcó como "No se entregó" en la app. Es solo para tu control: el chofer no ve esta sección.</p><div id="ch-rech"></div></section></div>' +
       '<section class="ch-card" aria-label="Camiones"><h3>Camiones hoy</h3><div id="ch-cams"></div></section></div>' +
       (esModulador() ? '<section class="ch-card ch-ancho" aria-label="Usuarios"><h3>Choferes y moduladores</h3><div id="ch-users"></div></section>' : '');
     document.getElementById('ch-fuente').value = cfg.fuente;
     document.getElementById('ch-fuente').onchange = function (e) { cfg.fuente = e.target.value; guardar(CLAVE, cfg); if (api.alCambiar) api.alCambiar(true); };
     document.getElementById('ch-salir').onclick = function () { cerrar(); fb.salir(); st.perfil = null; st.rutas = null; if (api.alCambiar) api.alCambiar(true); pintar(); };
     document.getElementById('ch-copiar').onclick = function () { try { navigator.clipboard.writeText(APP_URL); this.textContent = 'Copiado'; } catch (e) { /* sin portapapeles */ } };
-    pintarNC(); pintarDescuentos(); pintarCamiones(); pintarChoferes(); pintarSonido();
+    pintarNC(); pintarDescuentos(); pintarRechazos(); pintarCamiones(); pintarChoferes(); pintarSonido();
     var bs = document.getElementById('ch-son'), bp = document.getElementById('ch-son-prueba');
     if (bs) bs.onclick = function () { sonidoOn = !sonidoOn; try { localStorage.setItem(CLAVE_SON, sonidoOn ? '1' : '0'); } catch (e) { /* sin almacenamiento */ } pintarSonido(); if (sonidoOn) ding(); };
     if (bp) bp.onclick = function () { var a = sonidoOn; sonidoOn = true; ding(); sonidoOn = a; };
@@ -398,6 +401,49 @@
       var url = URL.createObjectURL(new Blob([u8], { type: 'application/pdf' }));
       if (win) win.location = url; else { var l = document.createElement('a'); l.href = url; l.download = nombre || 'adjunto.pdf'; l.click(); }
     }).catch(function (e) { if (win) win.close(); alert('No se pudo abrir el PDF: ' + e.message); });
+  }
+  // ---------- efectuar rechazos (control del modulador; el chofer no lo ve) ----------
+  // Visitas marcadas "No se entregó" en la app; el modulador las da por completadas o las ignora.
+  // Se guarda en la misma visita: dias/{día}/visitas/{PAT}/{cliente}/control = { estado, por, t }.
+  function listaRech() {
+    var out = [];
+    Object.keys(st.visitas || {}).forEach(function (pat) {
+      Object.keys(st.visitas[pat] || {}).forEach(function (cod) {
+        var v = st.visitas[pat][cod];
+        if (!v || v.estado !== 'modulado') return;
+        var r = Object.assign({}, v); r.pat = pat; r.cod = cod;
+        out.push(r);
+      });
+    });
+    return out;
+  }
+  function pendientesRech() { return listaRech().filter(function (r) { return !r.control; }).sort(function (a, b) { return (a.tLocal || 0) - (b.tLocal || 0); }); }
+  function pintarRechazos() {
+    var el = document.getElementById('ch-rech');
+    if (!el) return;
+    var pend = pendientesRech(), hechos = listaRech().filter(function (r) { return r.control; }).sort(function (a, b) { return (b.control.tLocal || 0) - (a.control.tLocal || 0); });
+    var item = function (r, abierto) {
+      var c = (st.rutas && st.rutas[r.pat] && st.rutas[r.pat].clientes[r.cod]) || {}, fs = c.facturas || [];
+      var tot = fs.reduce(function (a, f) { return a + (+f.importe || 0); }, 0);
+      var ses = st.sesiones[r.pat];
+      return '<li class="ch-d rech' + (r.control ? ' ' + r.control.estado : '') + '"><div class="ch-d-cab">' + chapa(r.pat) + '<div><b>' + esc(r.cod + ' · ' + (c.nombre || '')) + '</b><span>' + esc(r.usuario && ses && ses.uid === r.uid ? ses.nombre || r.usuario : r.usuario || '') + ' · ' + hhmm(r.tLocal) + '</span></div>' +
+        (abierto ? '' : '<span class="ch-pill ' + (r.control.estado === 'completado' ? 'aprobado' : '') + '">' + (r.control.estado === 'completado' ? 'Completado' : 'Ignorado') + '</span>') + '</div>' +
+        '<dl><dt>Motivo</dt><dd><b>' + esc(r.motivo || 'Sin motivo') + '</b>' + (r.nota ? ': ' + esc(r.nota) : '') + '</dd>' +
+        (fs.length ? '<dt>' + (fs.length > 1 ? 'Facturas' : 'Factura') + '</dt><dd>' + fs.map(function (f) { return esc(f.nro) + ' <span class="ch-sub">' + plata(f.importe) + '</span>'; }).join('<br>') + (fs.length > 1 ? '<br><b>Total ' + plata(tot) + '</b>' : '') + '</dd>' : '') +
+        (c.domicilio ? '<dt>Domicilio</dt><dd>' + esc(c.domicilio + (c.localidad ? ', ' + c.localidad : '')) + '</dd>' : '') + '</dl>' +
+        (abierto ? '<div class="ch-resp"><div><button type="button" class="ch-btn ok" data-rc="' + esc(r.pat + '/' + r.cod) + '">Completado</button><button type="button" class="ch-btn gris" data-ri="' + esc(r.pat + '/' + r.cod) + '">Ignorar</button></div></div>'
+          : '<p class="ch-sub">' + (r.control.estado === 'completado' ? 'Completado' : 'Ignorado') + ' por ' + esc(r.control.por || '') + ' a las ' + hhmm(r.control.tLocal) + '</p>') + '</li>';
+    };
+    el.innerHTML = (pend.length ? '<ul class="ch-lista">' + pend.map(function (r) { return item(r, true); }).join('') + '</ul>' : '<p class="ch-vacio">No hay rechazos por efectuar.</p>') +
+      (hechos.length ? '<details class="ch-hechos"><summary>Resueltos hoy (' + hechos.length + ')</summary><ul class="ch-lista">' + hechos.map(function (r) { return item(r, false); }).join('') + '</ul></details>' : '');
+    Array.prototype.forEach.call(el.querySelectorAll('[data-rc],[data-ri]'), function (b) {
+      b.onclick = function () {
+        var id = b.getAttribute('data-rc') || b.getAttribute('data-ri'), ok = b.hasAttribute('data-rc');
+        b.disabled = true;
+        fb.patch('dias/' + DIA + '/visitas/' + id + '/control', { estado: ok ? 'completado' : 'ignorado', por: st.perfil.nombre || fb.sesion().usuario, uid: fb.sesion().uid, t: fb.AHORA, tLocal: Date.now() })
+          .then(null, function (e) { alert('No se pudo guardar: ' + e.message); b.disabled = false; });
+      };
+    });
   }
   function pintarDescuentos() {
     var el = document.getElementById('ch-desc');

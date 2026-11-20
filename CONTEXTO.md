@@ -67,6 +67,9 @@ Este archivo sirve para retomar el proyecto en un chat nuevo: adjuntalo o pedile
 - La app lo actualiza con el GPS (cada 60 s), al hacer check-in y al marcar la visita o una visita no concretada. ETA: desde el GPS por el orden de la ruta (óptima o hoja), línea recta × 1,3 a 25 km/h + demora por cliente.
 - Página `seguimiento/index.html` (docs/seguimiento): estado, hora estimada, pasos, mapa con domicilio y camión, recordatorio de monto y cajones; lee cada 20 s. Requiere la regla `seguimiento`.
 
+## Efectuar rechazos (1.12.1)
+- App choferes del Tablero, debajo de Pedidos de descuento: sección "Efectuar rechazos" con las visitas marcadas "No se entregó" (`estado: modulado`) del día: camión, cliente, chofer, hora, motivo y nota, facturas e importes. Botones Completado / Ignorar → `dias/{día}/visitas/{PAT}/{cliente}/control = { estado: completado | ignorado, por, t }`. El chofer no lo ve. Cuenta en el badge rojo de la pestaña y suena el aviso al entrar uno nuevo.
+
 ## Estructura
 - `extension/`: extensión MV3 y el tablero (se publica igual en `docs/`).
   - `bg.js` (service worker: lee Chess y hojas de Google con la sesión del usuario), `lectores.js` (lectores inyectados en Chess/Nextbyn), `base-clientes.js` (base de clientes diaria desde Chess).
