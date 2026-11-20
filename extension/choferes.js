@@ -12,7 +12,7 @@
   var cfg = leer(CLAVE, { fuente: 'app' });
   var DIA = window.LTFirebase ? LTFirebase.dia() : '';
   var sigueHoy = true; // false cuando el Tablero eligió otro día de entrega
-  var st = { perfil: null, rutas: null, visitas: {}, sesiones: {}, gps: {}, optimo: {}, desc: {}, descViejos: {}, usuarios: null, error: '', at: null, pub: leer('ldTabPublicado', {}) };
+  var st = { perfil: null, rutas: null, visitas: {}, sesiones: {}, gps: {}, optimo: {}, nc: {}, desc: {}, descViejos: {}, usuarios: null, error: '', at: null, pub: leer('ldTabPublicado', {}) };
   var oyentes = [], timer = null, raiz = null, publicando = false;
 
   function leer(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
@@ -42,6 +42,7 @@
       fb.escuchar(d + 'visitas', function (v) { st.visitas = v || {}; avisarCambio(); }, err),
       fb.escuchar(d + 'sesiones', function (v) { st.sesiones = v || {}; avisarCambio(); }, err),
       fb.escuchar(d + 'optimo', function (v) { st.optimo = v || {}; avisarCambio(); }, err),
+      fb.escuchar(d + 'noconcretadas', function (v) { st.nc = v || {}; pintarBadge(); pintarNC(); avisarCambio(); }, err),
       fb.escuchar(d + 'gps', function (v) { st.gps = v || {}; if (api.alGps) api.alGps(); pintarCamiones(); }, err),
       fb.escuchar('descuentos', function (v) { st.desc = v || {}; pintarBadge(); pintarDescuentos(); }, err, '&orderBy=' + encodeURIComponent('"dia"') + '&equalTo=' + encodeURIComponent('"' + DIA + '"')),
     ];
@@ -121,6 +122,7 @@
         if (!v) c.pend++; else if (v.estado === 'entregado') c.e++; else if (v.estado === 'parcial') c.p++; else c.r++;
         cli[cod] = {
           nombre: x.nombre, domicilio: x.domicilio, estado: est, hora: v ? v.tLocal || v.t : null, seq: posOpt[cod] || x.n, optPos: posOpt[cod] || null,
+          nc: !v && st.nc[pat] && st.nc[pat][cod] ? { estado: st.nc[pat][cod].estado, motivo: st.nc[pat][cod].motivo, nota: st.nc[pat][cod].nota || '', t: st.nc[pat][cod].tLocal } : null,
           motivo: v ? [v.motivo, v.nota].filter(Boolean).join(': ') : '', fuente: 'app',
         };
         n++;
@@ -167,7 +169,7 @@
         var fl = Object.keys(facts).map(function (k) { facts[k].importe = Math.round(facts[k].importe); return facts[k]; });
         clientes[x.cod] = {
           n: i + 1, nombre: String(c.cliente).replace(/^\s*\d+\s*-\s*/, ''), domicilio: c.domicilio || '', localidad: c.localidad || '',
-          ll: v && v.ll ? v.ll : null, ventana: textoVentana(v),
+          ll: v && v.ll ? v.ll : null, ventana: textoVentana(v), tel: v && v.tel && v.tel.length ? v.tel : null,
           pago: v ? (v.pago === 'cc' ? 'Autorizado (cta. corriente)' : v.pago ? 'Autorizado' : 'No autorizado') : null,
           facturas: fl,
         };
@@ -195,12 +197,60 @@
   function pintarBadge() {
     var t = document.getElementById('tab-choferes');
     if (!t) return;
-    var n = pendientes().length;
-    t.innerHTML = 'App choferes' + (n ? ' <i class="ch-badge" title="' + n + ' pedidos de descuento esperando respuesta">' + n + '</i>' : '');
+    var n = pendientes().length, m = pendientesNC().length;
+    t.innerHTML = 'App choferes' + (m ? ' <i class="ch-badge nc" title="' + m + ' visitas no concretadas esperando respuesta">' + m + '</i>' : '') +
+      (n ? ' <i class="ch-badge" title="' + n + ' pedidos de descuento esperando respuesta">' + n + '</i>' : '');
   }
   function pendientes() {
     var todos = Object.assign({}, st.descViejos, st.desc);
     return Object.keys(todos).map(function (k) { var d = todos[k]; d.id = k; return d; }).filter(function (d) { return d.estado === 'pendiente'; }).sort(function (a, b) { return (a.tLocal || 0) - (b.tLocal || 0); });
+  }
+  // Visitas no concretadas: [{ pat, cod, … }]. Pendientes = sin respuesta y sin visita cargada después.
+  function listaNC() {
+    var out = [];
+    Object.keys(st.nc || {}).forEach(function (pat) {
+      Object.keys(st.nc[pat] || {}).forEach(function (cod) {
+        var n = Object.assign({}, st.nc[pat][cod]); n.pat = pat; n.cod = cod;
+        n.visitado = !!(st.visitas[pat] && st.visitas[pat][cod]);
+        out.push(n);
+      });
+    });
+    return out;
+  }
+  function pendientesNC() {
+    return listaNC().filter(function (n) { return n.estado === 'pendiente' && !n.visitado; }).sort(function (a, b) { return (a.tLocal || 0) - (b.tLocal || 0); });
+  }
+  function pintarNC() {
+    var el = document.getElementById('ch-nc');
+    if (!el) return;
+    var pend = pendientesNC();
+    var resp = listaNC().filter(function (n) { return n.estado !== 'pendiente' || n.visitado; }).sort(function (a, b) { return (b.tResp || b.tLocal || 0) - (a.tResp || a.tLocal || 0); });
+    var cli = function (n) { var r = st.rutas && st.rutas[n.pat] && st.rutas[n.pat].clientes[n.cod]; return r || {}; };
+    var item = function (n, abierto) {
+      var c = cli(n), id = n.pat + '/' + n.cod;
+      var pill = n.visitado ? '<span class="ch-pill">Ya visitado</span>' : n.estado === 'revisita' ? '<span class="ch-pill aprobado">Re-visita</span>' : '<span class="ch-pill rechazado">No re-visitar</span>';
+      return '<li class="ch-d nc ' + n.estado + '"><div class="ch-d-cab">' + chapa(n.pat) + '<div><b>' + esc(n.cod + ' · ' + (n.cliente || c.nombre || '')) + '</b><span>' + esc(n.chofer || n.usuario) + ' · ' + hhmm(n.tLocal) + (n.intento > 1 ? ' · ' + n.intento + '.º aviso' : '') + '</span></div>' + (abierto ? '' : pill) + '</div>' +
+        '<dl><dt>Motivo</dt><dd><b>' + esc(n.motivo) + '</b>' + (n.nota ? ': ' + esc(n.nota) : '') + '</dd>' +
+        (c.domicilio ? '<dt>Domicilio</dt><dd>' + esc(c.domicilio + (c.localidad ? ', ' + c.localidad : '')) + '</dd>' : '') +
+        (c.ventana ? '<dt>Ventana</dt><dd>' + esc(c.ventana) + '</dd>' : '') +
+        (c.tel && c.tel.length ? '<dt>Teléfono</dt><dd>' + c.tel.map(function (t) { return esc(t.t); }).join(' / ') + '</dd>' : '') + '</dl>' +
+        (abierto ? '<div class="ch-resp"><textarea rows="2" placeholder="Mensaje para el chofer (opcional). Ej.: el cliente abre a las 15, pasá después" data-rn="' + esc(id) + '"></textarea>' +
+          '<div><button type="button" class="ch-btn ok" data-rv="' + esc(id) + '">Confirmar re-visita</button><button type="button" class="ch-btn malo" data-nr="' + esc(id) + '">No re-visitar</button></div></div>'
+          : (n.respuesta ? '<p class="ch-r">' + esc(n.respondio || '') + ': ' + esc(n.respuesta) + '</p>' : '') + (n.tResp ? '<p class="ch-sub">Respondido ' + hhmm(n.tResp) + '</p>' : '')) + '</li>';
+    };
+    var activo = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('data-rn');
+    if (activo && pend.some(function (n) { return n.pat + '/' + n.cod === activo; })) return;
+    el.innerHTML = (pend.length ? '<ul class="ch-lista">' + pend.map(function (n) { return item(n, true); }).join('') + '</ul>' : '<p class="ch-vacio">No hay visitas no concretadas esperando respuesta.</p>') +
+      (resp.length ? '<details class="ch-hechos"><summary>Respondidas o resueltas hoy (' + resp.length + ')</summary><ul class="ch-lista">' + resp.map(function (n) { return item(n, false); }).join('') + '</ul></details>' : '');
+    Array.prototype.forEach.call(el.querySelectorAll('[data-rv],[data-nr]'), function (b) {
+      b.onclick = function () {
+        var id = b.getAttribute('data-rv') || b.getAttribute('data-nr'), ok = b.hasAttribute('data-rv');
+        var txt = (el.querySelector('[data-rn="' + id + '"]') || {}).value || '';
+        b.disabled = true;
+        fb.patch('dias/' + DIA + '/noconcretadas/' + id, { estado: ok ? 'revisita' : 'norevisitar', respuesta: txt.trim() || null, respondio: st.perfil.nombre || fb.sesion().usuario, tResp: fb.AHORA, uidResp: fb.sesion().uid })
+          .then(null, function (e) { alert('No se pudo guardar la respuesta: ' + e.message); b.disabled = false; });
+      };
+    });
   }
   function pintar() {
     pintarBadge();
@@ -235,6 +285,7 @@
       '<div class="ch-acc"><label class="ch-fuente">Entregas del Tablero: <select id="ch-fuente"><option value="app">App de choferes</option><option value="nextbyn">Nextbyn</option></select></label>' +
       '<button type="button" class="ch-btn sec" id="ch-salir">Salir</button></div></div>' +
       '<p class="ch-link">Enlace de la app para los choferes: <a href="' + APP_URL + '" target="_blank" rel="noopener">' + APP_URL.replace('https://', '') + '</a> <button type="button" class="ch-mini" id="ch-copiar">Copiar</button></p>' +
+      '<section class="ch-card ch-ancho ch-nc-card" aria-label="Visitas no concretadas"><h3>Visitas no concretadas</h3><p class="ch-sub">El chofer no pudo concretar la visita. Intentá salvar la entrega (por ejemplo, llamando al cliente) y confirmale si vuelve a pasar.</p><div id="ch-nc"></div></section>' +
       '<div class="ch-grid"><section class="ch-card" aria-label="Pedidos de descuento"><h3>Pedidos de descuento</h3><div id="ch-desc"></div></section>' +
       '<section class="ch-card" aria-label="Camiones"><h3>Camiones hoy</h3><div id="ch-cams"></div></section></div>' +
       (esModulador() ? '<section class="ch-card ch-ancho" aria-label="Usuarios"><h3>Choferes y moduladores</h3><div id="ch-users"></div></section>' : '');
@@ -242,7 +293,7 @@
     document.getElementById('ch-fuente').onchange = function (e) { cfg.fuente = e.target.value; guardar(CLAVE, cfg); if (api.alCambiar) api.alCambiar(true); };
     document.getElementById('ch-salir').onclick = function () { cerrar(); fb.salir(); st.perfil = null; st.rutas = null; if (api.alCambiar) api.alCambiar(true); pintar(); };
     document.getElementById('ch-copiar').onclick = function () { try { navigator.clipboard.writeText(APP_URL); this.textContent = 'Copiado'; } catch (e) { /* sin portapapeles */ } };
-    pintarDescuentos(); pintarCamiones(); pintarChoferes();
+    pintarNC(); pintarDescuentos(); pintarCamiones(); pintarChoferes();
   }
   function pintarDescuentos() {
     var el = document.getElementById('ch-desc');
@@ -327,12 +378,13 @@
       if (!window.LTFirebase || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
       sigueHoy = d === LTFirebase.dia();
       if (d === DIA) return;
-      DIA = d; st.rutas = null; st.visitas = {}; st.sesiones = {}; st.gps = {}; st.desc = {}; st.optimo = {};
+      DIA = d; st.rutas = null; st.visitas = {}; st.sesiones = {}; st.gps = {}; st.desc = {}; st.optimo = {}; st.nc = {};
       if (fb && fb.sesion() && st.perfil) escuchar(); else pintar();
       if (api.alCambiar) api.alCambiar();
     },
     dia: function () { return DIA; },
     pendientes: function () { return pendientes().length; },
+    pendientesNC: function () { return pendientesNC().length; },
     abrir: function (el) { raiz = el; pintar(); },
     alCambiar: null,
     alGps: null,

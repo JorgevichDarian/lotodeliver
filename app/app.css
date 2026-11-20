@@ -188,3 +188,14 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--naranja)
 .cli-eta{display:block;font-size:13.5px;font-weight:600;margin-top:3px}
 .cli-eta.bien{color:#1E8E50}.cli-eta.medio{color:#9A6400}.cli-eta.mal{color:#C0362C}
 .mk-pend.mk-opt::before{background:var(--naranja)}
+
+/* visita no concretada y llamar */
+.btn.morado{background:#7B3FC4;color:#fff}
+.acciones .btn.morado.grande{grid-column:1/-1}
+.ya.nc{background:#F1E8FB;color:#4B2380}
+.ya.nc.revisita{background:var(--verde-f);color:#14603A}
+.ya.nc.norevisitar{background:var(--rojo-f);color:#8E2323}
+.cli-nc{display:block;margin-top:3px;font-size:13.5px;font-weight:700;color:#6A33AE}
+.cli-nc.revisita{color:#1E8E50}.cli-nc.norevisitar{color:#C0362C}
+.btn.llamar small{font-weight:500;margin-left:6px;color:var(--tenue)}
+.btn[disabled]{opacity:.55}

@@ -58,7 +58,7 @@
   var pr = leerLS(CLAVE_PRIO, null); // { mapa, at }
   var CLAVE_VENT = 'ldReporteVent', CLAVE_OBS = 'ldReporteObs';
   var vt = leerLS(CLAVE_VENT, null); // { v: 3, mapa: { codigo: { f: [[desde, hasta] en minutos], nota, pago, ll: [lat, lng] } }, at }
-  if (vt && vt.v !== 3) vt = null; // caché anterior sin pago pendiente o sin ubicación
+  if (vt && vt.v !== 4) vt = null; // caché anterior sin pago pendiente, ubicación o teléfono
   var errVt = '', leyendoVt = false;
   var abiertos = {}, clientesAbiertos = {};
   var ocupado = { nextbyn: false, chess: false };
@@ -175,7 +175,7 @@
     if (leyendoVt) return;
     leyendoVt = true;
     pedir('ventanas').then(function (data) {
-      vt = { v: 3, mapa: armarVentanas(data.csv), at: data.at };
+      vt = { v: 4, mapa: armarVentanas(data.csv), at: data.at };
       errVt = '';
       guardarLS(CLAVE_VENT, vt);
     }).catch(function (e) {
@@ -324,6 +324,8 @@
     if (c.est === 'rechazado') return '<span class="pill p-re">' + (c.noEntApp ? 'No entregado' : dev ? 'Devolución' : 'Rechazado') + '</span>';
     if (c.est === 'parcial') return '<span class="pill p-re">' + (dev ? 'Devolución parcial' : 'Rechazo parcial') + '</span>';
     if (c.est === 'entregado') return '<span class="pill p-ok">Entregado</span>';
+    if (c.nc) return '<span class="pill p-nc" title="' + esc('Visita no concretada: ' + c.nc.motivo + (c.nc.nota ? ' (' + c.nc.nota + ')' : '') + ' a las ' + hhmm(c.nc.t)) + '">' +
+      (c.nc.estado === 'revisita' ? 'Re-visita confirmada' : c.nc.estado === 'norevisitar' ? 'No re-visitar' : 'No concretada') + '</span><span class="motivo">' + esc(c.nc.motivo) + (c.nc.nota ? ': ' + esc(c.nc.nota) : '') + '</span>';
     if (c.nbEstado) return '<span class="pill p-pe">' + esc(c.nbEstado.replace(/_/g, ' ').toLowerCase().replace(/^./, function (x) { return x.toUpperCase(); })) + '</span>';
     return '<span class="pill p-pe">' + (c.leidoNextbyn ? 'Pendiente' : 'En reparto') + '</span>';
   }
@@ -344,6 +346,7 @@
       c.horaNb = x && x.hora ? x.hora : null;
       c.seq = x && x.seq != null ? x.seq : null;
       c.optPos = x && x.optPos ? x.optPos : null;
+      c.nc = x && x.nc ? x.nc : null;
       c.est = c.rechazado ? 'rechazado' : c.parcial ? 'parcial' : c.entregado ? 'entregado' : '';
       var s = x && estadoNextbyn(x.estado);
       if (s === 'rechazado' || s === 'parcial') c.est = s;
@@ -461,6 +464,26 @@
   // Hoja de clientes (select D, F, BO, W, CA, T, U): código, razón social, "hh:mm a hh:mm; hh:mm a hh:mm",
   // comentario, descripción de sub-línea, longitud y latitud. Pago pendiente autorizado: comentario
   // con "AUTORIZADO" (no "NO AUTORIZADO") o cliente en cuenta corriente.
+  // Teléfonos del cliente (columnas N "Teléfono Móvil" y M "Teléfonos"): [{ n: para marcar, t: como figura, movil }].
+  // Números de 10 dígitos (característica + número): móvil → +54 9…, fijo → +54…. Otros, tal cual.
+  function telefonos(movil, fijos) {
+    var out = [], vistos = {};
+    function agregar(txt, esMovil) {
+      String(txt || '').split(/[\/;,]| - |\s{2,}/).forEach(function (p) {
+        var d = p.replace(/\D/g, '');
+        if (d.length < 6) return;
+        d = d.replace(/^54/, '').replace(/^0/, '');
+        if (d.length === 12 && /^\d{2,4}15/.test(d)) { var m = /^(\d{2,4})15(\d+)$/.exec(d); if (m && (m[1] + m[2]).length === 10) { d = m[1] + m[2]; esMovil = true; } }
+        if (d.length === 11 && d[0] === '9') { d = d.slice(1); esMovil = true; }
+        if (vistos[d]) return;
+        vistos[d] = 1;
+        out.push({ n: d.length === 10 ? (esMovil ? '+549' : '+54') + d : d, t: d, movil: !!esMovil });
+      });
+    }
+    agregar(movil, true);
+    agregar(fijos, false);
+    return out.slice(0, 3);
+  }
   function armarVentanas(csv) {
     var filas = leerCSV(csv), mapa = {}, n = 0;
     filas.forEach(function (f) {
@@ -469,7 +492,7 @@
       var txt = String(f[2] || '').trim(), fr = [], re = /(\d{2}):(\d{2}) a (\d{2}):(\d{2})/g, m;
       while ((m = re.exec(txt))) fr.push([+m[1] * 60 + +m[2], +m[3] * 60 + +m[4]]);
       var limpio = /^\d{2}:\d{2} a \d{2}:\d{2}(; \d{2}:\d{2} a \d{2}:\d{2})*$/.test(txt);
-      mapa[cod] = { f: limpio ? fr : [], nota: !limpio && txt ? txt : '', pago: pagoAutorizado(f[3], f[4]), ll: ubicacion(f[6], f[5]) };
+      mapa[cod] = { f: limpio ? fr : [], nota: !limpio && txt ? txt : '', pago: pagoAutorizado(f[3], f[4]), ll: ubicacion(f[6], f[5]), tel: telefonos(f[8], f[7]) };
       n++;
     });
     if (!n) throw new Error('La hoja de ventanas horarias no tiene clientes con código.');
@@ -613,7 +636,7 @@
     if (dc) return cruzar(dc, nbCli);
     return Object.keys(nbCli).map(function (id) {
       var x = nbCli[id];
-      return { codigo: id.indexOf('N:') ? id : '', cliente: (id.indexOf('N:') ? id + ' - ' : '') + x.nombre, domicilio: x.domicilio, nbEstado: x.estado, motivos: x.motivo ? [x.motivo] : [], horaNb: x.hora || null, seq: x.seq != null ? x.seq : null, optPos: x.optPos || null, leidoNextbyn: true, est: estadoNextbyn(x.estado) };
+      return { codigo: id.indexOf('N:') ? id : '', cliente: (id.indexOf('N:') ? id + ' - ' : '') + x.nombre, domicilio: x.domicilio, nbEstado: x.estado, motivos: x.motivo ? [x.motivo] : [], horaNb: x.hora || null, seq: x.seq != null ? x.seq : null, optPos: x.optPos || null, nc: x.nc || null, leidoNextbyn: true, est: estadoNextbyn(x.estado) };
     });
   }
   function pct(a, b) { return b ? Math.round((a / b) * 100) + '%' : '—'; }
@@ -801,6 +824,7 @@
     if (sinExtension) {
       av += '<div class="err">Para traer los datos hace falta la extensión <b>Tablero de ruta - LoToDeliver</b> en este Chrome. <a href="' + GUIA + '">Cómo instalarla</a>.</div>';
     } else {
+      if (window.LTChoferes && LTChoferes.pendientesNC && LTChoferes.pendientesNC()) av += '<div class="aviso-nc">' + LTChoferes.pendientesNC() + (LTChoferes.pendientesNC() === 1 ? ' visita no concretada espera' : ' visitas no concretadas esperan') + ' tu respuesta para salvar la entrega. <a href="#choferes">Responder</a></div>';
       if (window.LTChoferes && LTChoferes.pendientes()) av += '<div class="aviso-desc">' + LTChoferes.pendientes() + (LTChoferes.pendientes() === 1 ? ' pedido de descuento espera' : ' pedidos de descuento esperan') + ' respuesta. <a href="#choferes">Responder</a></div>';
       if (errNb) av += '<div class="err">Nextbyn: ' + esc(errNb) + (nb ? ' Se muestran los datos de las ' + hhmm(nb.at) + '.' : '') + '</div>';
       if (errCh) av += '<div class="err">Chess: ' + esc(errCh) + (ch ? ' Se muestran los datos de las ' + hhmm(ch.at) + '.' : '') + '</div>';

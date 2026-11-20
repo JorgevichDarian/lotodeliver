@@ -33,6 +33,10 @@ Este archivo sirve para retomar el proyecto en un chat nuevo: adjuntalo o pedile
 - Se guarda en el celular (`ldAppOptimo`) y cada cálculo se sube a `dias/{día}/optimo/{PATENTE}/{id}` (orden, km, fin, tLocal). El mapa de la app dibuja la ruta con OSRM `/route`.
 - Tablero (1.4.0): pendientes en el orden de la última ruta óptima ("N.º en ruta óptima", también para la proyección de riesgo); entregados como antes. **Cumplimiento de ruta óptima** por camión y de la flota: visitas hechas al cliente que seguía en el plan vigente (el próximo no visitado después del último visitado con ese plan; saltear cuenta una vez) sobre visitas hechas después de calcularlo. Requiere la regla `dias/$dia/optimo/$pat` en Firebase.
 
+## Llamar y visita no concretada (1.5.0)
+- Teléfonos: la extensión lee también las columnas M (Teléfonos) y N (Teléfono Móvil) de la base de clientes (`vt.v = 4`); `tel: [{ n, t, movil }]` se publica en la hoja de ruta. Formato de marcado: 10 dígitos → `+549…` (móvil) o `+54…` (fijo). Botón "Llamar al cliente" (`tel:`) en la ficha de la app.
+- Visita no concretada (botón morado): motivos Cerrado / Camino intransitable + comentario. Se guarda en `dias/{día}/noconcretadas/{PAT}/{cod}` (`estado: pendiente`, `intento`). El Tablero muestra aviso morado y la tarjeta "Visitas no concretadas" (App choferes): Confirmar re-visita (`revisita`) o No re-visitar (`norevisitar`) con mensaje. La app avisa al chofer al responder. Si después se carga una visita, deja de estar pendiente. Requiere la regla `noconcretadas` en Firebase.
+
 ## Estructura
 - `extension/`: extensión MV3 y el tablero (se publica igual en `docs/`).
   - `bg.js` (service worker: lee Chess y hojas de Google con la sesión del usuario), `lectores.js` (lectores inyectados en Chess/Nextbyn), `base-clientes.js` (base de clientes diaria desde Chess).

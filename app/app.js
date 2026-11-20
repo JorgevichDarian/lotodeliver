@@ -18,7 +18,7 @@
   var TXT_EST = { entregado: 'Entregado', parcial: 'Entrega parcial', modulado: 'No entregado' };
 
   var st = {
-    perfil: null, pat: null, rutas: null, sesiones: {}, visitas: {}, local: {}, descuentos: {},
+    perfil: null, pat: null, rutas: null, sesiones: {}, visitas: {}, local: {}, descuentos: {}, nc: {},
     vista: 'clientes', filtro: 'pend', gps: { estado: 'apagado' }, pantalla: true,
     opt: null, verOpt: true, calculando: false,
   };
@@ -187,6 +187,18 @@
       st.visitas = v || {};
       Object.keys(st.local).forEach(function (k) { if (st.visitas[k] && st.visitas[k].tLocal === st.local[k].tLocal) delete st.local[k]; });
       pintarTodo();
+    }, errorOyente), fb.escuchar('dias/' + DIA + '/noconcretadas/' + st.pat, function (v) {
+      var antes = st.nc || {};
+      st.nc = v || {};
+      // Aviso cuando el modulador responde una visita no concretada.
+      Object.keys(st.nc).forEach(function (cod) {
+        var a = antes[cod], b = st.nc[cod], c = ruta() && ruta().clientes[cod];
+        if (a && a.estado === 'pendiente' && b.estado !== 'pendiente' && b.tLocal === a.tLocal) {
+          avisar((c ? c.nombre + ': ' : '') + (b.estado === 'revisita' ? 'el modulador confirmó la re-visita.' : 'el modulador indicó no volver.') + (b.respuesta ? ' ' + b.respuesta : ''), b.estado !== 'revisita');
+          if (navigator.vibrate) try { navigator.vibrate([200, 100, 200]); } catch (e) { /* sin vibración */ }
+        }
+      });
+      pintarTodo();
     }, errorOyente)];
     $app.innerHTML =
       '<header class="barra ruta"><div class="b-izq">' + chapa(st.pat) + '<span class="b-nom">' + esc(st.perfil.nombre || fb.sesion().usuario) + '</span>' + (DIA !== HOY ? '<span class="pild medio">' + fechaCorta(DIA) + '</span>' : '') + '</div>' +
@@ -265,7 +277,7 @@
         '<span class="n' + (usarOpt ? ' opt' : '') + '">' + (vis ? (vis.estado === 'modulado' ? '✕' : '✓') : usarOpt ? i + 1 : (c.n || '·')) + '</span>' +
         '<span class="cli-txt"><b>' + esc(c.nombre) + '</b><span>' + esc(c.domicilio || '') + (c.localidad ? ', ' + esc(c.localidad) : '') + '</span>' +
         (vis ? '<span class="cli-est">' + TXT_EST[vis.estado] + (vis.motivo ? ': ' + esc(vis.motivo) : '') + ' · ' + hhmm(vis.tLocal) + (st.local[c.codigo] ? ' · sin enviar' : '') + '</span>'
-          : '<span class="cli-ven">' + esc(c.ventana || 'Sin ventana') + '</span>' + (usarOpt ? lineaLlegada(c, ll) : '')) +
+          : '<span class="cli-ven">' + esc(c.ventana || 'Sin ventana') + '</span>' + lineaNC(c.codigo) + (usarOpt ? lineaLlegada(c, ll) : '')) +
         '</span><span class="cod">' + esc(c.codigo) + '</span></button></li>';
     }).join('') + '</ul>';
     v.innerHTML = h;
@@ -380,9 +392,15 @@
       '<p class="ven">Ventana: <b>' + esc(c.ventana || 'Sin ventana') + '</b>' + (c.pago ? ' · Pago pendiente: <b>' + esc(c.pago) + '</b>' : '') + '</p></div>' +
       '<button type="button" class="icono-btn cerrar" data-cerrar aria-label="Cerrar">✕</button></div>';
     if (vis) h += '<p class="ya ' + vis.estado + '">' + TXT_EST[vis.estado] + (vis.motivo ? ': ' + esc(vis.motivo) : '') + (vis.nota ? ' (' + esc(vis.nota) + ')' : '') + ' a las ' + hhmm(vis.tLocal) + '. Podés corregirlo abajo.</p>';
+    var nc = !vis && st.nc[cod];
+    if (nc) h += '<p class="ya nc ' + nc.estado + '">' + textoNC(nc) + '</p>';
     h += '<div class="acciones"><button type="button" class="btn ok grande" data-est="entregado">Entregado</button>' +
       '<button type="button" class="btn sec" data-est="parcial">Entrega parcial</button>' +
-      '<button type="button" class="btn malo" data-est="modulado">No se entregó</button></div>';
+      '<button type="button" class="btn malo" data-est="modulado">No se entregó</button>' +
+      '<button type="button" class="btn morado grande" data-nc>' + (nc ? 'Volver a avisar: visita no concretada' : 'Visita no concretada') + '</button></div>';
+    var tels = c.tel || [];
+    if (tels.length) h += tels.map(function (t) { return '<a class="btn sec ancho llamar" href="tel:' + esc(t.n) + '">Llamar al cliente <small>' + esc(formatoTel(t.t)) + (tels.length > 1 ? (t.movil ? ' · móvil' : ' · fijo') : '') + '</small></a>'; }).join('');
+    else h += '<button type="button" class="btn sec ancho" disabled>Sin teléfono cargado en la base</button>';
     if (c.ll) h += '<a class="btn sec ancho" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=' + c.ll[0] + ',' + c.ll[1] + '">Cómo llegar (Google Maps)</a>';
     h += '<button type="button" class="btn sec ancho" data-desc>Pedir descuento para este cliente</button>';
     if (facts.length) {
@@ -401,6 +419,44 @@
       };
     });
     $hoja.querySelector('[data-desc]').onclick = function () { formDescuento({ cliente: cod }); };
+    $hoja.querySelector('[data-nc]').onclick = function () { fichaNoConcretada(cod); };
+  }
+
+  // ---------- visita no concretada (el modulador decide si se re-visita) ----------
+  var MOTIVOS_NC = ['Cerrado', 'Camino intransitable'];
+  function formatoTel(d) { return d.length === 10 ? d.slice(0, 3) + ' ' + d.slice(3, 6) + '-' + d.slice(6) : d; }
+  function textoNC(n) {
+    var base = 'Visita no concretada (' + esc(n.motivo) + (n.nota ? ': ' + esc(n.nota) : '') + ') a las ' + hhmm(n.tLocal);
+    if (n.estado === 'revisita') return base + '. <b>Re-visita confirmada</b>' + (n.respuesta ? ': ' + esc(n.respuesta) : '') + '.';
+    if (n.estado === 'norevisitar') return base + '. <b>El modulador indicó no volver</b>' + (n.respuesta ? ': ' + esc(n.respuesta) : '') + '. Marcá "No se entregó".';
+    return base + '. Esperando la respuesta del modulador.';
+  }
+  function lineaNC(cod) {
+    var n = !visita(cod) && st.nc[cod];
+    if (!n) return '';
+    var t = n.estado === 'revisita' ? 'Re-visitar: confirmado por el modulador' : n.estado === 'norevisitar' ? 'No re-visitar: marcá No se entregó' : 'No concretada (' + n.motivo + '): esperando al modulador';
+    return '<span class="cli-nc ' + n.estado + '">' + esc(t) + '</span>';
+  }
+  function fichaNoConcretada(cod) {
+    var c = ruta().clientes[cod], prev = st.nc[cod];
+    abrirHoja('<div class="hoja-cab"><div><span class="cod">' + esc(cod) + '</span><h2>Visita no concretada</h2><p>' + esc(c.nombre) + '</p></div><button type="button" class="icono-btn cerrar" data-cerrar aria-label="Cerrar">✕</button></div>' +
+      '<p class="sub">Le llega un aviso al modulador para que intente salvar la entrega y te confirme si volvés a pasar.</p>' +
+      '<label class="campo">Comentario (opcional)<textarea id="nota" rows="2" placeholder="Por ejemplo: persiana baja, nadie atiende el teléfono"></textarea></label>' +
+      '<p class="sub">¿Qué pasó?</p><div class="motivos">' + MOTIVOS_NC.map(function (m) { return '<button type="button" class="btn morado motivo" data-m="' + esc(m) + '">' + esc(m) + '</button>'; }).join('') + '</div>');
+    Array.prototype.forEach.call($hoja.querySelectorAll('.motivo'), function (b) {
+      b.onclick = function () {
+        var rec = {
+          motivo: b.getAttribute('data-m'), nota: document.getElementById('nota').value.trim() || null, estado: 'pendiente',
+          intento: (prev && prev.intento || 0) + 1, cliente: c.nombre, pat: st.pat, dia: DIA,
+          tLocal: Date.now(), t: fb.AHORA, uid: fb.sesion().uid, usuario: fb.sesion().usuario, chofer: st.perfil.nombre || fb.sesion().usuario,
+        };
+        fb.encolar('put', 'dias/' + DIA + '/noconcretadas/' + st.pat + '/' + cod, rec);
+        st.nc[cod] = rec;
+        cerrarHoja();
+        avisar('Aviso enviado al modulador. Seguí con el próximo cliente; te avisamos cuando responda.');
+        pintarTodo();
+      };
+    });
   }
   function fichaModulacion(cod) {
     var c = ruta().clientes[cod];

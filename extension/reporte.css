@@ -529,3 +529,12 @@ body.otro-dia .ahora,body.otro-dia .tag.a{display:none}
 .opt-flota{margin-top:6px}
 .opt-flota b{font-size:15px}
 .opt-flota.bien b{color:var(--verde)}.opt-flota.medio b{color:var(--ambar)}.opt-flota.mal b{color:var(--rojo)}
+
+/* visitas no concretadas (morado) */
+.aviso-nc{background:#F1E8FB;color:#4B2380;border-left:4px solid #7B3FC4;padding:10px 14px;border-radius:4px;margin-bottom:10px;font-weight:600}
+.aviso-nc a{color:#7B3FC4;margin-left:6px}
+.ch-badge.nc{background:#7B3FC4}
+.ch-d.nc{border-left-color:#7B3FC4}
+.ch-d.nc.revisita{border-left-color:var(--verde)}.ch-d.nc.norevisitar{border-left-color:var(--rojo)}
+.ch-nc-card{border-top:3px solid #7B3FC4}
+.pill.p-nc{background:#EBDDFB;color:#5A2A99}
