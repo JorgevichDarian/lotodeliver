@@ -210,3 +210,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--naranja)
 .cli-ci{display:block;margin-top:3px;font-size:13.5px;font-weight:700;color:#2F72D0}
 .desc .monto{margin:6px 0 0;font-size:15px}
 .desc .d-pdf{margin-top:8px}
+
+/* descuento con varios SKU */
+.skus{border:0;padding:0;margin:0}
+.skus legend{padding:0;margin-bottom:6px}
+.fila-sku{display:grid;grid-template-columns:1fr 92px 44px;gap:8px;margin-bottom:8px;align-items:center}
+.fila-sku select,.fila-sku input{min-width:0}
+.fila-sku .s-quitar{width:44px;height:44px}
+.d-items{margin:4px 0 0;padding-left:18px;font-size:14px}

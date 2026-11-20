@@ -559,7 +559,7 @@
     h += '<ul class="descs">' + pend.concat(lista).map(function (d) {
       var est = d.id ? d.estado : 'sinenviar';
       return '<li class="desc ' + est + '"><div class="d-cab"><b>' + esc(d.nombreCliente || d.cliente) + '</b><span class="pill ' + est + '">' + { pendiente: 'Esperando respuesta', aprobado: 'Aprobado', rechazado: 'Rechazado', sinenviar: 'Sin enviar' }[est] + '</span></div>' +
-        '<p>Factura ' + esc(d.factura) + ' · SKU ' + esc(d.sku) + ' · ' + esc(d.cantidad) + ' u.</p><p class="mot">' + esc(d.motivo) + (d.detalle ? ': ' + esc(d.detalle) : '') + '</p>' +
+        '<p>Factura ' + esc(d.factura) + (d.items && d.items.length ? '</p><ul class="d-items">' + d.items.map(function (x) { return '<li>' + esc(x.sku + (x.desc ? ' · ' + x.desc : '')) + ' — <b>' + esc(x.cantidad) + ' bultos</b></li>'; }).join('') + '</ul><p>' : ' · SKU ' + esc(d.sku) + ' · ' + esc(d.cantidad) + ' u.') + '</p><p class="mot">' + esc(d.motivo) + (d.detalle ? ': ' + esc(d.detalle) : '') + '</p>' +
         (d.monto != null && d.estado !== 'pendiente' ? '<p class="monto">Monto a descontar: <b>$ ' + Number(d.monto).toLocaleString('es-AR', { maximumFractionDigits: 2 }) + '</b></p>' : '') +
         (d.respuesta ? '<p class="resp"><b>' + esc(d.respondio || 'Modulador') + ':</b> ' + esc(d.respuesta) + '</p>' : '') +
         (d.adjunto && d.id ? '<button type="button" class="btn sec ancho d-pdf" data-pdf="' + esc(d.id) + '">📎 Ver ' + esc(d.adjunto.nombre || 'PDF') + '</button>' : '') +
@@ -588,8 +588,8 @@
       '<form id="f-desc" class="form">' +
       '<label class="campo">Cliente<select name="cliente" required><option value="">Elegí el cliente</option>' + lista.map(function (c) { return '<option value="' + esc(c.codigo) + '"' + (pre.cliente === c.codigo ? ' selected' : '') + '>' + esc(c.codigo + ' · ' + c.nombre) + '</option>'; }).join('') + '</select></label>' +
       '<label class="campo">Factura<select name="factura" required></select></label>' +
-      '<label class="campo">SKU<select name="sku" required></select></label>' +
-      '<label class="campo">Cantidad (unidades)<input name="cantidad" type="number" inputmode="decimal" min="0" step="any" required></label>' +
+      '<fieldset class="campo skus"><legend>SKU y cantidad (bultos)</legend><div id="f-skus"></div>' +
+      '<button type="button" class="btn sec ancho" id="b-mas-sku">+ Agregar otro SKU de esta factura</button></fieldset>' +
       '<label class="campo">Motivo<select name="motivo" required><option value="">Elegí el motivo</option>' + MOTIVOS_DESC.map(function (m) { return '<option>' + esc(m) + '</option>'; }).join('') + '</select></label>' +
       '<label class="campo">Detalle<textarea name="detalle" rows="2" placeholder="Opcional (obligatorio si el motivo es Otro)"></textarea></label>' +
       '<button class="btn prim grande ancho" type="submit">Enviar pedido</button></form>';
@@ -602,10 +602,32 @@
       if (fs.length === 1) f.factura.value = fs[0].nro;
       skus();
     }
-    function skus() {
+    // Varios SKU de la misma factura: una fila por SKU con su cantidad en bultos.
+    var $skus = document.getElementById('f-skus');
+    function itemsFactura() {
       var c = ruta().clientes[f.cliente.value], fa = c && (c.facturas || []).filter(function (x) { return x.nro === f.factura.value; })[0];
-      var it = (fa && fa.items) || [];
-      f.sku.innerHTML = '<option value="">' + (it.length ? 'Elegí el SKU' : 'Elegí primero la factura') + '</option>' + it.map(function (x) { return '<option value="' + esc(x.sku) + '">' + esc(x.sku + (x.desc ? ' · ' + x.desc : '') + ' (' + x.bultos + ' bultos)') + '</option>'; }).join('') + '<option value="__otro">Otro (escribirlo)</option>';
+      return (fa && fa.items) || [];
+    }
+    function opcionesSku(sel, valor) {
+      var it = itemsFactura();
+      sel.innerHTML = '<option value="">' + (it.length ? 'Elegí el SKU' : 'Elegí primero la factura') + '</option>' + it.map(function (x) { return '<option value="' + esc(x.sku) + '">' + esc(x.sku + (x.desc ? ' · ' + x.desc : '') + ' (' + x.bultos + ' bultos)') + '</option>'; }).join('') + '<option value="__otro">Otro (escribirlo)</option>';
+      if (valor && !it.some(function (x) { return x.sku === valor; }) && valor !== '__otro') { var o = document.createElement('option'); o.value = o.textContent = valor; sel.insertBefore(o, sel.lastChild); }
+      sel.value = valor || '';
+    }
+    function filaSku() {
+      var d = document.createElement('div');
+      d.className = 'fila-sku';
+      d.innerHTML = '<select class="s-sku" aria-label="SKU"></select><input class="s-cant" type="number" inputmode="decimal" min="0" step="any" placeholder="Bultos" aria-label="Cantidad en bultos">' +
+        '<button type="button" class="icono-btn s-quitar" aria-label="Quitar este SKU">✕</button>';
+      var sel = d.querySelector('.s-sku');
+      opcionesSku(sel);
+      sel.onchange = function () { otro(sel, 'Código del SKU'); };
+      d.querySelector('.s-quitar').onclick = function () { if ($skus.children.length > 1) d.remove(); else { sel.value = ''; d.querySelector('.s-cant').value = ''; } };
+      $skus.appendChild(d);
+      return d;
+    }
+    function skus() {
+      Array.prototype.forEach.call($skus.querySelectorAll('.s-sku'), function (sel) { opcionesSku(sel, sel.value && sel.value !== '__otro' ? sel.value : ''); });
     }
     function otro(sel, txt) {
       if (sel.value !== '__otra' && sel.value !== '__otro') return;
@@ -615,13 +637,28 @@
     }
     f.cliente.onchange = facturas;
     f.factura.onchange = function () { otro(f.factura, 'Número de factura'); skus(); };
-    f.sku.onchange = function () { otro(f.sku, 'Código del SKU'); };
+    document.getElementById('b-mas-sku').onclick = function () { filaSku().querySelector('.s-sku').focus(); };
+    filaSku();
     facturas();
     f.onsubmit = function (ev) {
       ev.preventDefault();
       if (f.motivo.value === 'Otro' && !f.detalle.value.trim()) { avisar('Contá el motivo en el detalle.', true); return; }
-      var c = ruta().clientes[f.cliente.value];
-      var d = { dia: DIA, pat: st.pat, cliente: f.cliente.value, nombreCliente: c ? c.nombre : '', factura: f.factura.value, sku: f.sku.value, cantidad: +f.cantidad.value,
+      var c = ruta().clientes[f.cliente.value], it = itemsFactura(), items = [], vistos = {}, malo = '';
+      Array.prototype.forEach.call($skus.querySelectorAll('.fila-sku'), function (r) {
+        var sku = r.querySelector('.s-sku').value, cant = r.querySelector('.s-cant').value;
+        if (!sku && cant === '') return; // fila vacía
+        if (!sku || sku === '__otro') { malo = 'Elegí el SKU en cada fila.'; return; }
+        if (!(+cant > 0)) { malo = 'Poné la cantidad de bultos de cada SKU.'; return; }
+        if (vistos[sku]) { malo = 'El SKU ' + sku + ' está repetido.'; return; }
+        vistos[sku] = 1;
+        var x = it.filter(function (y) { return y.sku === sku; })[0];
+        items.push({ sku: sku, desc: x && x.desc ? x.desc : null, cantidad: +cant });
+      });
+      if (!malo && !items.length) malo = 'Agregá al menos un SKU con su cantidad.';
+      if (malo) { avisar(malo, true); return; }
+      var total = items.reduce(function (a, x) { return a + x.cantidad; }, 0);
+      var d = { dia: DIA, pat: st.pat, cliente: f.cliente.value, nombreCliente: c ? c.nombre : '', factura: f.factura.value,
+        items: items, sku: items.length === 1 ? items[0].sku + (items[0].desc ? ' - ' + items[0].desc : '') : items.length + ' SKUs', cantidad: total, unidad: 'bultos',
         motivo: f.motivo.value, detalle: f.detalle.value.trim() || null, estado: 'pendiente', uid: fb.sesion().uid, usuario: fb.sesion().usuario, nombre: st.perfil.nombre || fb.sesion().usuario, t: fb.AHORA, tLocal: Date.now() };
       var loc = leer('ldAppDescLocal', []);
       loc.push(d); guardar('ldAppDescLocal', loc.slice(-50));

@@ -402,7 +402,9 @@
     var item = function (d, abierto) {
       return '<li class="ch-d ' + d.estado + '"><div class="ch-d-cab">' + chapa(d.pat) + '<div><b>' + esc(d.cliente + ' · ' + (d.nombreCliente || '')) + '</b><span>' + esc(d.nombre || d.usuario) + ' · ' + (d.dia !== DIA ? d.dia.split('-').reverse().join('/') + ' ' : '') + hhmm(d.tLocal) + '</span></div>' +
         (abierto ? '' : '<span class="ch-pill ' + d.estado + '">' + (d.estado === 'aprobado' ? 'Aprobado' : 'Rechazado') + '</span>') + '</div>' +
-        '<dl><dt>Factura</dt><dd>' + esc(d.factura) + '</dd><dt>SKU</dt><dd>' + esc(d.sku) + '</dd><dt>Cantidad</dt><dd>' + esc(d.cantidad) + '</dd><dt>Motivo</dt><dd>' + esc(d.motivo) + (d.detalle ? ': ' + esc(d.detalle) : '') + '</dd>' +
+        '<dl><dt>Factura</dt><dd>' + esc(d.factura) + '</dd>' + (d.items && d.items.length
+          ? '<dt>' + (d.items.length > 1 ? 'SKUs' : 'SKU') + '</dt><dd><ul class="ch-items">' + d.items.map(function (x) { return '<li>' + esc(x.sku + (x.desc ? ' - ' + x.desc : '')) + ' — <b>' + esc(x.cantidad) + ' bultos</b></li>'; }).join('') + '</ul>' + (d.items.length > 1 ? '<span class="ch-sub">Total: ' + esc(d.cantidad) + ' bultos</span>' : '') + '</dd>'
+          : '<dt>SKU</dt><dd>' + esc(d.sku) + '</dd><dt>Cantidad</dt><dd>' + esc(d.cantidad) + '</dd>') + '<dt>Motivo</dt><dd>' + esc(d.motivo) + (d.detalle ? ': ' + esc(d.detalle) : '') + '</dd>' +
         (!abierto && d.monto != null ? '<dt>A descontar</dt><dd><b>' + plata(d.monto) + '</b></dd>' : '') +
         (!abierto && d.adjunto ? '<dt>Adjunto</dt><dd><button type="button" class="ch-adj-ver" data-ver="' + esc(d.id) + '" data-nom="' + esc(d.adjunto.nombre || '') + '">📎 ' + esc(d.adjunto.nombre || 'PDF') + '</button></dd>' : '') + '</dl>' +
         (abierto ? '<div class="ch-resp"><div class="ch-monto"><label><em>Monto a descontar <b>*</b></em><span><i>$</i><input inputmode="decimal" autocomplete="off" placeholder="0" data-m="' + esc(d.id) + '" value="' + esc(montoSel[d.id] || '') + '"></span></label>' +

@@ -578,3 +578,5 @@ body.otro-dia .ahora,body.otro-dia .tag.a{display:none}
 .ch-son,.ch-son-prueba{border:1px solid var(--linea);background:#fff;border-radius:6px;padding:5px 10px;font:inherit;font-size:13px;cursor:pointer}
 .ch-son[aria-pressed=false]{color:var(--tenue)}
 .ch-monto em{font-style:normal}
+.ch-items{margin:0;padding-left:16px}
+.ch-items li{margin:1px 0}

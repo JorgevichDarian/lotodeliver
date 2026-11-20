@@ -51,6 +51,9 @@ Este archivo sirve para retomar el proyecto en un chat nuevo: adjuntalo o pedile
 - Responder un descuento pide "Monto a descontar" (obligatorio para aprobar, puede ser 0; al rechazar sin monto queda 0) y permite adjuntar un PDF (≤ 5 MB) que se guarda en base64 en `adjuntos/{id}`; el descuento guarda `monto` y `adjunto: { nombre, tam }`. El chofer ve el monto y abre el PDF desde la app. Requiere regla `adjuntos`.
 - Aviso sonoro en el Tablero (Web Audio, dos notas suaves, ~0,7 s) cuando entra un descuento o una visita no concretada nueva; botón para activar/desactivar y Probar en App choferes (`ldReporteSonido`).
 
+## Descuento con varios SKU (1.9.1)
+- El pedido de descuento admite varias filas SKU + cantidad en **bultos** de la misma factura. Se guarda `items: [{ sku, desc, cantidad }]`, `unidad: 'bultos'`, y por compatibilidad `sku` (el único o "N SKUs") y `cantidad` (total). Un solo monto a descontar por pedido.
+
 ## Estructura
 - `extension/`: extensión MV3 y el tablero (se publica igual en `docs/`).
   - `bg.js` (service worker: lee Chess y hojas de Google con la sesión del usuario), `lectores.js` (lectores inyectados en Chess/Nextbyn), `base-clientes.js` (base de clientes diaria desde Chess).
