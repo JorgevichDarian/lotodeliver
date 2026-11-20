@@ -30,6 +30,12 @@
       ".read": "auth != null && root.child('usuarios').child(auth.uid).exists()",
       "$cod": { ".write": "auth != null && root.child('usuarios').child(auth.uid).exists()" }
     },
+    "seguimiento": {
+      "$token": {
+        ".read": "$token.length >= 16",
+        ".write": "auth != null && root.child('usuarios').child(auth.uid).exists()"
+      }
+    },
     "adjuntos": {
       ".read": "auth != null && root.child('usuarios').child(auth.uid).exists()",
       "$id": { ".write": "auth != null && root.child('usuarios').child(auth.uid).child('rol').val() === 'modulador'" }

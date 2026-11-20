@@ -30,6 +30,10 @@ fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8')
   .replace('</title>', '</title>\n<link rel="icon" href="icono.png">')
   .replace(/(src|href)="((?:vendor\/leaflet\/)?[\w-]+\.(?:js|css))"/g, '$1="$2?v=' + version + '"'));
 
+// Seguimiento público del pedido (docs/seguimiento): la página que recibe el cliente por WhatsApp.
+fs.mkdirSync(path.join(docs, 'seguimiento'), { recursive: true });
+fs.copyFileSync(path.join(__dirname, '..', 'seguimiento', 'index.html'), path.join(docs, 'seguimiento', 'index.html'));
+
 // App de choferes (docs/app): mismos archivos compartidos (Firebase, Leaflet) desde la carpeta de arriba.
 const appSrc = path.join(__dirname, '..', 'app'), appDst = path.join(docs, 'app');
 fs.mkdirSync(appDst, { recursive: true });

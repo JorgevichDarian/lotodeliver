@@ -452,6 +452,8 @@
     guardar('ldAppCheckin', st.checkin);
     fb.encolar('patch', 'dias/' + DIA + '/sesiones/' + st.pat, { checkin: { cod: cod, tIn: st.checkin.tIn } });
     avisar('Check-in hecho. El tiempo corre hasta que marques cómo terminó la visita.');
+    actualizarSeguimientos({ cod: cod, estado: 'en_el_lugar' }, true);
+    actualizarSeguimientos(null, true);
     pintarTodo();
   }
   function cerrarCheckin() {
@@ -493,10 +495,66 @@
   }
   function avisoDe(cod) { return (leer('ldAppAvisos', {})[DIA + '|' + st.pat] || {})[cod] || null; }
   function plata(n) { return '$ ' + Math.round(n || 0).toLocaleString('es-AR'); }
-  function textoAviso(c, hora) {
-    var monto = c.importe || (c.facturas || []).reduce(function (a, f) { return a + (+f.importe || 0); }, 0);
+  function montoDe(c) { return c.importe || (c.facturas || []).reduce(function (a, f) { return a + (+f.importe || 0); }, 0); }
+  function textoAviso(c, hora, link) {
     return 'Hola, nos comunicamos de Logística Total S.R.L., su pedido está en camino, llegará a las ' + hora + '. ' +
-      'Recordá tener listo ' + plata(monto) + (c.cajones ? ' y ' + c.cajones + (c.cajones === 1 ? ' cajón con sus botellas retornables' : ' cajones con sus botellas retornables') : '') + '. Gracias';
+      'Recordá tener listo ' + plata(montoDe(c)) + (c.cajones ? ' y ' + c.cajones + (c.cajones === 1 ? ' cajón con sus botellas retornables' : ' cajones con sus botellas retornables') : '') + '. Gracias' +
+      (link ? '\n\nSeguí tu pedido en vivo: ' + link : '');
+  }
+
+  // ---------- seguimiento en vivo para el cliente (página pública con el token del link) ----------
+  // seguimiento/{token} = { dia, pat, cod, cliente, domicilio, ll, ventana, monto, cajones, estado, eta, antes, camion, actualizado }
+  // estado: en_camino | en_el_lugar | entregado | parcial | no_entregado | no_concretada
+  function tokenNuevo() {
+    var a = new Uint8Array(18), abc = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789', t = '';
+    (window.crypto || window.msCrypto).getRandomValues(a);
+    for (var i = 0; i < a.length; i++) t += abc[a[i] % abc.length];
+    return t;
+  }
+  function linkSeguimiento(token) { return location.origin + location.pathname.replace(/app\/(index\.html)?$/, '') + 'seguimiento/?t=' + token; }
+  function avisosHoy() { return leer('ldAppAvisos', {})[DIA + '|' + st.pat] || {}; }
+  // Orden de los pendientes (ruta óptima si la hay; si no, la hoja de ruta) y llegada estimada a cada uno
+  // desde la ubicación actual: manejo en línea recta × 1,3 a 25 km/h más la demora por cliente.
+  function etasPendientes() {
+    var pend = clientes().filter(function (c) { return !visita(c.codigo); });
+    pend = st.opt ? ordenOptimo(pend) : pend.sort(function (a, b) { return (a.n || 0) - (b.n || 0); });
+    if (st.checkin) pend.sort(function (a, b) { return (b.codigo === st.checkin.cod) - (a.codigo === st.checkin.cod); });
+    var t = Date.now(), pos = st.gps.ll, dem = servicioMin(), out = {};
+    pend.forEach(function (c, i) {
+      if (st.checkin && st.checkin.cod === c.codigo) { t = Math.max(t, st.checkin.tIn + dem * 6e4); out[c.codigo] = { antes: i, eta: st.checkin.tIn }; if (c.ll) pos = c.ll; return; }
+      if (pos && c.ll) t += metros(pos, c.ll) / 1000 * 1.3 / 25 * 36e5;
+      out[c.codigo] = { antes: i, eta: Math.ceil(t / 3e5) * 3e5 };
+      t += dem * 6e4;
+      if (c.ll) pos = c.ll;
+    });
+    return out;
+  }
+  // Actualiza las páginas de seguimiento de los clientes avisados de este camión.
+  // fin: { cod, estado, motivo } para el cliente que se acaba de visitar.
+  var ultSeg = 0;
+  function actualizarSeguimientos(fin, forzar) {
+    if (!st.pat) return;
+    var av = avisosHoy(), cods = Object.keys(av).filter(function (k) { return av[k].token && !av[k].cerrado; });
+    if (!cods.length) return;
+    if (!forzar && !fin && Date.now() - ultSeg < 60000) return;
+    ultSeg = Date.now();
+    var etas = etasPendientes(), cam = st.gps.ll && Date.now() - (st.gps.t || 0) < 5 * 6e4 ? { lat: st.gps.ll[0], lng: st.gps.ll[1], t: st.gps.t } : null;
+    var cambio = false;
+    cods.forEach(function (cod) {
+      var tok = av[cod].token, ruta0 = 'seguimiento/' + tok;
+      if (fin && fin.cod === cod) {
+        var llego = fin.estado === 'en_el_lugar';
+        fb.encolar('patch', ruta0, llego ? { estado: 'en_el_lugar', tLlego: Date.now(), camion: null, eta: null, actualizado: Date.now() }
+          : { estado: fin.estado, motivo: fin.motivo || null, tFin: Date.now(), camion: null, eta: null, actualizado: Date.now() });
+        if (!llego) { av[cod].cerrado = true; cambio = true; }
+        return;
+      }
+      var e = etas[cod];
+      if (!e) return; // ya visitado
+      var enLugar = st.checkin && st.checkin.cod === cod;
+      fb.encolar('patch', ruta0, { estado: enLugar ? 'en_el_lugar' : 'en_camino', eta: enLugar ? null : e.eta, antes: e.antes, camion: e.antes <= 3 && !enLugar ? cam : null, actualizado: Date.now() });
+    });
+    if (cambio) { var todo = leer('ldAppAvisos', {}); todo[DIA + '|' + st.pat] = av; guardar('ldAppAvisos', todo); }
   }
   function avisoWhatsapp(cod) {
     var c = Object.assign({ codigo: cod }, ruta().clientes[cod]), tel = telWhatsapp(c);
@@ -506,14 +564,23 @@
       '<p class="sub">Mensaje que se va a abrir en WhatsApp (lo enviás vos desde ahí):</p><p class="wa-prev" id="wa-prev"></p>' +
       '<button type="button" class="btn wa grande ancho" id="wa-ir"><svg class="wa-ico" viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M16 3C8.8 3 3 8.7 3 15.8c0 2.5.7 4.9 2 7L3 29l6.4-2c2 1.1 4.3 1.7 6.6 1.7 7.2 0 13-5.7 13-12.8S23.2 3 16 3zm0 23.4c-2.1 0-4.1-.6-5.9-1.7l-.4-.3-3.8 1.2 1.2-3.7-.3-.4c-1.2-1.8-1.9-3.9-1.9-6 0-5.9 4.9-10.6 11-10.6s11 4.8 11 10.6-4.9 10.9-10.9 10.9zm6-7.9c-.3-.2-1.9-1-2.2-1.1-.3-.1-.5-.2-.7.2-.2.3-.8 1-1 1.2-.2.2-.4.2-.7.1-.3-.2-1.4-.5-2.6-1.6-1-.9-1.6-1.9-1.8-2.2-.2-.3 0-.5.1-.7l.5-.6c.2-.2.2-.4.3-.6.1-.2 0-.4 0-.6l-1-2.4c-.3-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.3-1.2 1.1-1.2 2.7s1.2 3.2 1.4 3.4c.2.2 2.4 3.6 5.8 5 .8.3 1.4.5 1.9.7.8.3 1.5.2 2.1.1.6-.1 1.9-.8 2.2-1.5.3-.7.3-1.4.2-1.5-.1-.2-.3-.3-.6-.4z"/></svg>Abrir WhatsApp</button>');
     var inp = document.getElementById('wa-hora'), prev = document.getElementById('wa-prev');
-    var pintarPrev = function () { prev.textContent = textoAviso(c, inp.value || hora); };
+    var anterior = avisosHoy()[cod], token = anterior && anterior.token && !anterior.cerrado ? anterior.token : tokenNuevo(), link = linkSeguimiento(token);
+    var pintarPrev = function () { prev.textContent = textoAviso(c, inp.value || hora, link); };
     inp.oninput = pintarPrev; pintarPrev();
     document.getElementById('wa-ir').onclick = function () {
-      var url = 'https://wa.me/' + tel + '?text=' + encodeURIComponent(textoAviso(c, inp.value || hora));
+      var url = 'https://wa.me/' + tel + '?text=' + encodeURIComponent(textoAviso(c, inp.value || hora, link));
       window.open(url, '_blank');
+      // Página de seguimiento del cliente (lectura pública solo con el token del link).
+      var etaIni = (function () { var p = (inp.value || hora).split(':'), d = new Date(); d.setHours(+p[0], +p[1], 0, 0); return d.getTime(); })();
+      var e0 = etasPendientes()[cod] || {};
+      fb.encolar('put', 'seguimiento/' + token, {
+        v: 1, dia: DIA, pat: st.pat, cod: cod, cliente: c.nombre || '', domicilio: [c.domicilio, c.localidad].filter(Boolean).join(', '), ll: c.ll || null, ventana: c.ventana || '',
+        monto: Math.round(montoDe(c)), cajones: c.cajones || 0, estado: 'en_camino', eta: etaIni, antes: e0.antes != null ? e0.antes : null,
+        camion: st.gps.ll ? { lat: st.gps.ll[0], lng: st.gps.ll[1], t: st.gps.t || Date.now() } : null, creado: fb.AHORA, actualizado: Date.now(), uid: fb.sesion().uid,
+      });
       // Registro del aviso (el Tablero cuenta los avisos de cada chofer).
       var av = leer('ldAppAvisos', {}), k = DIA + '|' + st.pat, prev = (av[k] || {})[cod];
-      var rec = { tLocal: Date.now(), hora: inp.value || hora, veces: (prev && prev.veces || 0) + 1 };
+      var rec = { tLocal: Date.now(), hora: inp.value || hora, veces: (prev && prev.veces || 0) + 1, token: token };
       av = {}; av[k] = Object.assign({}, (leer('ldAppAvisos', {})[k] || {})); av[k][cod] = rec; // solo se guarda el día y camión actuales
       guardar('ldAppAvisos', av);
       fb.encolar('patch', 'dias/' + DIA + '/sesiones/' + st.pat + '/avisos/' + cod, { tLocal: rec.tLocal, hora: rec.hora, veces: rec.veces, t: fb.AHORA });
@@ -552,6 +619,7 @@
           tLocal: Date.now(), t: fb.AHORA, uid: fb.sesion().uid, usuario: fb.sesion().usuario, chofer: st.perfil.nombre || fb.sesion().usuario,
         };
         fb.encolar('put', 'dias/' + DIA + '/noconcretadas/' + st.pat + '/' + cod, rec);
+        actualizarSeguimientos({ cod: cod, estado: 'no_concretada', motivo: rec.motivo }, true);
         st.nc[cod] = rec;
         cerrarHoja();
         avisar('Aviso enviado al modulador. Seguí con el próximo cliente; te avisamos cuando responda.');
@@ -593,6 +661,7 @@
     }
     st.local[cod] = x;
     fb.encolar('put', 'dias/' + DIA + '/visitas/' + st.pat + '/' + cod, x);
+    actualizarSeguimientos({ cod: cod, estado: v.estado === 'modulado' ? 'no_entregado' : v.estado, motivo: v.estado === 'modulado' ? v.motivo : null }, true);
     cerrarHoja();
     avisar(TXT_EST[v.estado] + ' guardado.');
     pintarTodo();
@@ -790,6 +859,7 @@
     if (!st.pat || !navigator.onLine) { if (st.pat) traza(ll, ahora); return; }
     if (!ultGps || ahora - ultGps.t > 20000 || metros(ultGps.ll, ll) > 50) {
       ultGps = { t: ahora, ll: ll };
+      actualizarSeguimientos();
       fb.put('dias/' + DIA + '/gps/' + st.pat, { lat: ll[0], lng: ll[1], acc: Math.round(p.coords.accuracy), vel: p.coords.speed == null ? null : Math.round(p.coords.speed * 3.6), t: fb.AHORA, tLocal: ahora, uid: fb.sesion().uid, usuario: fb.sesion().usuario })
         .catch(function () { /* se manda en la próxima */ });
     }

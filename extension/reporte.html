@@ -17,7 +17,7 @@
     <div>
     <span class="empresa">Logística Total SRL</span>
     <h1>Tablero de ruta <span class="lotod">LoToDeliver</span></h1>
-    <p class="donde"><span id="hoy">CD Neuquén</span> <span class="ver">v1.11.2</span></p>
+    <p class="donde"><span id="hoy">CD Neuquén</span> <span class="ver">v1.12.0</span></p>
     </div>
   </div>
   <div class="fuentes" aria-label="Fuentes de datos">
@@ -129,6 +129,12 @@
     &quot;demoras&quot;: {
       &quot;.read&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot;,
       &quot;$cod&quot;: { &quot;.write&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot; }
+    },
+    &quot;seguimiento&quot;: {
+      &quot;$token&quot;: {
+        &quot;.read&quot;: &quot;$token.length &gt;= 16&quot;,
+        &quot;.write&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot;
+      }
     },
     &quot;adjuntos&quot;: {
       &quot;.read&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot;,

@@ -61,6 +61,12 @@ Este archivo sirve para retomar el proyecto en un chat nuevo: adjuntalo o pedile
 ## Estado solo desde la app (1.11.1)
 - Con "Entregas del Tablero: App de choferes", el estado de cada cliente (entregado / parcial / rechazado / pendiente) y la hora de entrega salen solo de lo que marcó el chofer en la app; los estados y horas de Chess (liquidación, rechazos) y de Nextbyn no cuentan como visita. Con Nextbyn como fuente sigue la lógica anterior.
 
+## Seguimiento en vivo para el cliente (1.12.0)
+- El aviso por WhatsApp suma "Seguí tu pedido en vivo: …/lotodeliver/seguimiento/?t=TOKEN" (token aleatorio de 18 caracteres por cliente y día, guardado en `ldAppAvisos`).
+- `seguimiento/{token}` (lectura pública solo conociendo el token; escritura de usuarios): dia, pat, cod, cliente, domicilio, ll, ventana, monto, cajones, estado (en_camino | en_el_lugar | entregado | parcial | no_entregado | no_concretada), eta, antes (entregas antes que la suya), camion {lat,lng,t} (solo si faltan ≤ 3 entregas antes), actualizado.
+- La app lo actualiza con el GPS (cada 60 s), al hacer check-in y al marcar la visita o una visita no concretada. ETA: desde el GPS por el orden de la ruta (óptima o hoja), línea recta × 1,3 a 25 km/h + demora por cliente.
+- Página `seguimiento/index.html` (docs/seguimiento): estado, hora estimada, pasos, mapa con domicilio y camión, recordatorio de monto y cajones; lee cada 20 s. Requiere la regla `seguimiento`.
+
 ## Estructura
 - `extension/`: extensión MV3 y el tablero (se publica igual en `docs/`).
   - `bg.js` (service worker: lee Chess y hojas de Google con la sesión del usuario), `lectores.js` (lectores inyectados en Chess/Nextbyn), `base-clientes.js` (base de clientes diaria desde Chess).

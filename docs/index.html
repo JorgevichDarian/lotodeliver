@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=1.11.2">
-<link rel="stylesheet" href="reporte.css?v=1.11.2">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=1.12.0">
+<link rel="stylesheet" href="reporte.css?v=1.12.0">
 </head>
 <body>
 <header class="barra">
@@ -18,7 +18,7 @@
     <div>
     <span class="empresa">Logística Total SRL</span>
     <h1>Tablero de ruta <span class="lotod">LoToDeliver</span></h1>
-    <p class="donde"><span id="hoy">CD Neuquén</span> <span class="ver">v1.11.2</span></p>
+    <p class="donde"><span id="hoy">CD Neuquén</span> <span class="ver">v1.12.0</span></p>
     </div>
   </div>
   <div class="fuentes" aria-label="Fuentes de datos">
@@ -131,6 +131,12 @@
       &quot;.read&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot;,
       &quot;$cod&quot;: { &quot;.write&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot; }
     },
+    &quot;seguimiento&quot;: {
+      &quot;$token&quot;: {
+        &quot;.read&quot;: &quot;$token.length &gt;= 16&quot;,
+        &quot;.write&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot;
+      }
+    },
     &quot;adjuntos&quot;: {
       &quot;.read&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).exists()&quot;,
       &quot;$id&quot;: { &quot;.write&quot;: &quot;auth != null &amp;&amp; root.child(&#x27;usuarios&#x27;).child(auth.uid).child(&#x27;rol&#x27;).val() === &#x27;modulador&#x27;&quot; }
@@ -180,11 +186,11 @@
 <li>Para actualizar la extensión: descargá la nueva versión, reemplazá los archivos de la carpeta y en <code>chrome://extensions</code> tocá el botón de recargar de <b>Tablero de ruta</b>.</li>
 </ul></div>
 </section>
-<script src="vendor/leaflet/leaflet.js?v=1.11.2"></script>
-<script src="firebase-config.js?v=1.11.2"></script>
-<script src="lt-firebase.js?v=1.11.2"></script>
-<script src="choferes.js?v=1.11.2"></script>
-<script src="reporte.js?v=1.11.2"></script>
-<script src="mapa.js?v=1.11.2"></script>
+<script src="vendor/leaflet/leaflet.js?v=1.12.0"></script>
+<script src="firebase-config.js?v=1.12.0"></script>
+<script src="lt-firebase.js?v=1.12.0"></script>
+<script src="choferes.js?v=1.12.0"></script>
+<script src="reporte.js?v=1.12.0"></script>
+<script src="mapa.js?v=1.12.0"></script>
 </body>
 </html>
