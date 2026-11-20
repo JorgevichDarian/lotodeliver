@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Tablero de ruta - LoToDeliver",
   "short_name": "LoToDeliver",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Trae los datos de Chess para el Tablero de ruta - LoToDeliver (entregas desde la app de choferes).",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA12S3fy6Wr+PNkZC+71rB7ubmIRYlbbwiXnWteNpFnxq1PxvR3PVCF5Y7JANqRfKWBrwNBoDscdjpnUBnURX7tw4fL3/QZI2MuuGedqCrSD9GYWFBAxj2CfZ8oTyEdkpayrZ31qOVk+RRtFJYo9kELC+fXzjPwHgus+zH9dLcAAFNE00jgsD7T2Xkpjt/czqaaz/CG+/4TBz9aOyksjmzhDLCkqYwKZuS0Xz6KOz5G8BkHW/cB0buGf2xwP7BMar930mn2kRy3JBeTX3o4cg184jPu4EEAKjOcjzmIhsxEz0zcwRNzSgcNOe2aC1liOedp61lI0+zYSTYBj6wIRi2HwIDAQAB",
   "permissions": [

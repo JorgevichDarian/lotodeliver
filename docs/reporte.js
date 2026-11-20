@@ -58,7 +58,7 @@
   var pr = leerLS(CLAVE_PRIO, null); // { mapa, at }
   var CLAVE_VENT = 'ldReporteVent', CLAVE_OBS = 'ldReporteObs';
   var vt = leerLS(CLAVE_VENT, null); // { v: 3, mapa: { codigo: { f: [[desde, hasta] en minutos], nota, pago, ll: [lat, lng] } }, at }
-  if (vt && vt.v !== 4) vt = null; // caché anterior sin pago pendiente, ubicación o teléfono
+  if (vt && vt.v !== 5) vt = null; // caché anterior sin pago pendiente, ubicación o teléfono
   var errVt = '', leyendoVt = false;
   var abiertos = {}, clientesAbiertos = {};
   var ocupado = { nextbyn: false, chess: false };
@@ -175,9 +175,11 @@
     if (leyendoVt) return;
     leyendoVt = true;
     pedir('ventanas').then(function (data) {
-      vt = { v: 4, mapa: armarVentanas(data.csv), at: data.at };
+      vt = { v: 5, mapa: armarVentanas(data.csv), at: data.at };
       errVt = '';
       guardarLS(CLAVE_VENT, vt);
+      // La hoja de ruta de la app lleva ubicación, ventana y teléfono de esta hoja: se vuelve a publicar.
+      if (ch && window.LTChoferes) LTChoferes.alLeerChess(ch, vt, nbNextbyn);
     }).catch(function (e) {
       var m = String(e.message || e);
       errVt = m === 'NOEXT' ? 'falta la extensión' : m;
@@ -469,7 +471,11 @@
   function telefonos(movil, fijos) {
     var out = [], vistos = {};
     function agregar(txt, esMovil) {
-      String(txt || '').split(/[\/;,]| - |\s{2,}/).forEach(function (p) {
+      var s0 = String(txt == null ? '' : txt).trim();
+      // Google puede mandar la columna como número: 2996540478, 2.996540478E9 o con separadores de miles.
+      if (/^\d+(\.\d+)?e\+?\d+$/i.test(s0)) s0 = Number(s0).toFixed(0);
+      else if (/^[\d.,\s]+$/.test(s0) && s0.replace(/\D/g, '').length >= 8 && !/\d\s{2,}\d/.test(s0)) s0 = s0.replace(/\D/g, '');
+      s0.split(/[\/;,]| - |\s{2,}/).forEach(function (p) {
         var d = p.replace(/\D/g, '');
         if (d.length < 6) return;
         d = d.replace(/^54/, '').replace(/^0/, '');
