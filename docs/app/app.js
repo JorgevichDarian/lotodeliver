@@ -171,7 +171,7 @@
     if (s && !s.fin && s.uid !== fb.sesion().uid && !confirm('El camión ' + pat + ' figura en uso por ' + (s.nombre || s.usuario) + '. ¿Lo tomás igual?')) return;
     if (s && s.fin && s.uid === fb.sesion().uid && !confirm('Ya cerraste la jornada de ' + pat + '. ¿La abrís de nuevo?')) return;
     var ses = { uid: fb.sesion().uid, usuario: fb.sesion().usuario, nombre: st.perfil.nombre || fb.sesion().usuario, inicio: s && s.uid === fb.sesion().uid && s.inicio ? s.inicio : fb.AHORA, fin: null };
-    fb.encolar('put', 'dias/' + DIA + '/sesiones/' + pat, ses);
+    fb.encolar('patch', 'dias/' + DIA + '/sesiones/' + pat, ses); // patch: conserva check-in y avisos del día
     st.pat = pat;
     guardar('ldAppCamion', { dia: DIA, pat: pat, uid: fb.sesion().uid, en: LTFirebase.dia() });
     pantallaRuta();
@@ -279,7 +279,7 @@
         '<span class="n' + (usarOpt ? ' opt' : '') + '">' + (vis ? (vis.estado === 'modulado' ? '✕' : '✓') : usarOpt ? i + 1 : (c.n || '·')) + '</span>' +
         '<span class="cli-txt"><b>' + esc(c.nombre) + '</b><span>' + esc(c.domicilio || '') + (c.localidad ? ', ' + esc(c.localidad) : '') + '</span>' +
         (vis ? '<span class="cli-est">' + TXT_EST[vis.estado] + (vis.motivo ? ': ' + esc(vis.motivo) : '') + ' · ' + hhmm(vis.tLocal) + (st.local[c.codigo] ? ' · sin enviar' : '') + '</span>'
-          : '<span class="cli-ven">' + esc(c.ventana || 'Sin ventana') + '</span>' + (st.checkin && st.checkin.cod === c.codigo ? '<span class="cli-ci">En el cliente <b class="reloj-ci" data-t="' + st.checkin.tIn + '">' + reloj(st.checkin.tIn) + '</b></span>' : '') + lineaNC(c.codigo) + (usarOpt ? lineaLlegada(c, ll) : '')) +
+          : '<span class="cli-ven">' + esc(c.ventana || 'Sin ventana') + '</span>' + (!c.vis && avisoDe(c.codigo) ? '<span class="cli-av">Avisado ' + hhmm(avisoDe(c.codigo).tLocal) + '</span>' : '') + (st.checkin && st.checkin.cod === c.codigo ? '<span class="cli-ci">En el cliente <b class="reloj-ci" data-t="' + st.checkin.tIn + '">' + reloj(st.checkin.tIn) + '</b></span>' : '') + lineaNC(c.codigo) + (usarOpt ? lineaLlegada(c, ll) : '')) +
         '</span><span class="cod">' + esc(c.codigo) + '</span></button></li>';
     }).join('') + '</ul>';
     v.innerHTML = h;
@@ -405,12 +405,16 @@
     h += '<div class="acciones"><button type="button" class="btn ok grande" data-est="entregado">Entregado</button>' +
       '<button type="button" class="btn sec" data-est="parcial">Entrega parcial</button>' +
       '<button type="button" class="btn malo" data-est="modulado">No se entregó</button>' +
-      '<button type="button" class="btn morado grande" data-nc>' + (nc ? 'Volver a avisar: visita no concretada' : 'Visita no concretada') + '</button></div>';
+      '<button type="button" class="btn morado grande" data-nc>' + (nc ? 'Volver a avisar: visita no concretada' : 'Visita no concretada') + '</button></div>' +
+      '<button type="button" class="btn amarillo ancho" data-desc>Pedir descuento para este cliente</button>';
+    var telWa = telWhatsapp(c), avi = avisoDe(cod);
+    if (!vis && avi) h += '<p class="ya avisado">Avisado por WhatsApp a las ' + hhmm(avi.tLocal) + ' (llegada ' + esc(avi.hora) + ')' + (avi.veces > 1 ? ' · ' + avi.veces + ' veces' : '') + '.</p>';
+    if (!vis) h += telWa ? '<button type="button" class="btn wa ancho" data-wa><svg class="wa-ico" viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M16 3C8.8 3 3 8.7 3 15.8c0 2.5.7 4.9 2 7L3 29l6.4-2c2 1.1 4.3 1.7 6.6 1.7 7.2 0 13-5.7 13-12.8S23.2 3 16 3zm0 23.4c-2.1 0-4.1-.6-5.9-1.7l-.4-.3-3.8 1.2 1.2-3.7-.3-.4c-1.2-1.8-1.9-3.9-1.9-6 0-5.9 4.9-10.6 11-10.6s11 4.8 11 10.6-4.9 10.9-10.9 10.9zm6-7.9c-.3-.2-1.9-1-2.2-1.1-.3-.1-.5-.2-.7.2-.2.3-.8 1-1 1.2-.2.2-.4.2-.7.1-.3-.2-1.4-.5-2.6-1.6-1-.9-1.6-1.9-1.8-2.2-.2-.3 0-.5.1-.7l.5-.6c.2-.2.2-.4.3-.6.1-.2 0-.4 0-.6l-1-2.4c-.3-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.3-1.2 1.1-1.2 2.7s1.2 3.2 1.4 3.4c.2.2 2.4 3.6 5.8 5 .8.3 1.4.5 1.9.7.8.3 1.5.2 2.1.1.6-.1 1.9-.8 2.2-1.5.3-.7.3-1.4.2-1.5-.1-.2-.3-.3-.6-.4z"/></svg>' + (avi ? 'Avisar de nuevo por WhatsApp' : 'Avisar próximo cliente en ruta') + '</button>'
+      : '<button type="button" class="btn wa ancho" disabled><svg class="wa-ico" viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M16 3C8.8 3 3 8.7 3 15.8c0 2.5.7 4.9 2 7L3 29l6.4-2c2 1.1 4.3 1.7 6.6 1.7 7.2 0 13-5.7 13-12.8S23.2 3 16 3zm0 23.4c-2.1 0-4.1-.6-5.9-1.7l-.4-.3-3.8 1.2 1.2-3.7-.3-.4c-1.2-1.8-1.9-3.9-1.9-6 0-5.9 4.9-10.6 11-10.6s11 4.8 11 10.6-4.9 10.9-10.9 10.9zm6-7.9c-.3-.2-1.9-1-2.2-1.1-.3-.1-.5-.2-.7.2-.2.3-.8 1-1 1.2-.2.2-.4.2-.7.1-.3-.2-1.4-.5-2.6-1.6-1-.9-1.6-1.9-1.8-2.2-.2-.3 0-.5.1-.7l.5-.6c.2-.2.2-.4.3-.6.1-.2 0-.4 0-.6l-1-2.4c-.3-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.3-1.2 1.1-1.2 2.7s1.2 3.2 1.4 3.4c.2.2 2.4 3.6 5.8 5 .8.3 1.4.5 1.9.7.8.3 1.5.2 2.1.1.6-.1 1.9-.8 2.2-1.5.3-.7.3-1.4.2-1.5-.1-.2-.3-.3-.6-.4z"/></svg>Avisar por WhatsApp: sin celular en la base</button>';
     var tels = c.tel || [];
     if (tels.length) h += tels.map(function (t) { return '<a class="btn sec ancho llamar" href="tel:' + esc(t.n) + '">Llamar al cliente <small>' + esc(formatoTel(t.t)) + (tels.length > 1 ? (t.movil ? ' · móvil' : ' · fijo') : '') + '</small></a>'; }).join('');
     else h += '<button type="button" class="btn sec ancho" disabled>Sin teléfono cargado en la base</button>';
     if (c.ll) h += '<a class="btn sec ancho" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=' + c.ll[0] + ',' + c.ll[1] + '">Cómo llegar (Google Maps)</a>';
-    h += '<button type="button" class="btn sec ancho" data-desc>Pedir descuento para este cliente</button>';
     if (facts.length) {
       h += '<h3>Facturas</h3>' + facts.map(function (f) {
         return '<details class="fact"><summary><b>' + esc(f.nro) + '</b><span>' + importeTxt(f.importe) + '</span></summary><table><tr><th>SKU</th><th class="r">Bultos</th><th class="r">Importe</th></tr>' +
@@ -428,6 +432,7 @@
     });
     $hoja.querySelector('[data-desc]').onclick = function () { formDescuento({ cliente: cod }); };
     $hoja.querySelector('[data-nc]').onclick = function () { fichaNoConcretada(cod); };
+    var bwa = $hoja.querySelector('[data-wa]'); if (bwa) bwa.onclick = function () { avisoWhatsapp(cod); };
     var bci = $hoja.querySelector('[data-ci]'); if (bci) bci.onclick = function () { checkIn(cod); fichaCliente(cod); };
     var bno = $hoja.querySelector('[data-ci-no]'); if (bno) bno.onclick = function () { cerrarCheckin(); fichaCliente(cod); };
   }
@@ -458,6 +463,56 @@
   setInterval(function () {
     Array.prototype.forEach.call(document.querySelectorAll('.reloj-ci'), function (el) { el.textContent = reloj(+el.getAttribute('data-t')); });
   }, 1000);
+
+  // ---------- aviso por WhatsApp al próximo cliente ----------
+  // Número para WhatsApp: el móvil de la base (+549…) sin el "+". Si no hay móvil, el primero que haya.
+  function telWhatsapp(c) {
+    var t = (c.tel || []).filter(function (x) { return x.movil; })[0] || (c.tel || [])[0];
+    return t ? String(t.n).replace(/\D/g, '') : '';
+  }
+  // Hora estimada de llegada: desde la ubicación actual (GPS) en línea recta × 1,3 a 25 km/h; si no hay GPS,
+  // la de la ruta óptima; si tampoco, en 15 min. Se redondea a los 5 minutos siguientes.
+  function etaCliente(c) {
+    var t = null, ahora = Date.now();
+    if (st.gps.ll && c.ll && Date.now() - (st.gps.t || 0) < 15 * 6e4 && window.LTOptimo) {
+      var km = LTOptimo.matrizRecta([st.gps.ll, c.ll]).km[0][1];
+      t = ahora + Math.max(3, km / 25 * 60) * 6e4;
+    } else if (st.opt && st.opt.res.llegadas[c.codigo]) {
+      var m = st.opt.res.llegadas[c.codigo].llega, d = new Date(); d.setHours(0, 0, 0, 0);
+      t = Math.max(ahora + 5 * 6e4, d.getTime() + m * 6e4);
+    } else t = ahora + 15 * 6e4;
+    return Math.ceil(t / 3e5) * 3e5;
+  }
+  function avisoDe(cod) { return (leer('ldAppAvisos', {})[DIA + '|' + st.pat] || {})[cod] || null; }
+  function plata(n) { return '$ ' + Math.round(n || 0).toLocaleString('es-AR'); }
+  function textoAviso(c, hora) {
+    var monto = c.importe || (c.facturas || []).reduce(function (a, f) { return a + (+f.importe || 0); }, 0);
+    return 'Hola, nos comunicamos de Logística Total S.R.L., su pedido está en camino, llegará a las ' + hora + '. ' +
+      'Recordá tener listo ' + plata(monto) + (c.cajones ? ' y ' + c.cajones + (c.cajones === 1 ? ' cajón con sus botellas retornables' : ' cajones con sus botellas retornables') : '') + '. Gracias';
+  }
+  function avisoWhatsapp(cod) {
+    var c = Object.assign({ codigo: cod }, ruta().clientes[cod]), tel = telWhatsapp(c);
+    var hora = hhmm(etaCliente(c));
+    abrirHoja('<div class="hoja-cab"><div><span class="cod">' + esc(cod) + '</span><h2>Avisar que vas en camino</h2><p>' + esc(c.nombre) + ' · ' + esc(formatoTel(tel.replace(/^549?/, ''))) + '</p></div><button type="button" class="icono-btn cerrar" data-cerrar aria-label="Cerrar">✕</button></div>' +
+      '<label class="campo">Hora estimada de llegada<input type="time" id="wa-hora" value="' + hora + '"></label>' +
+      '<p class="sub">Mensaje que se va a abrir en WhatsApp (lo enviás vos desde ahí):</p><p class="wa-prev" id="wa-prev"></p>' +
+      '<button type="button" class="btn wa grande ancho" id="wa-ir"><svg class="wa-ico" viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M16 3C8.8 3 3 8.7 3 15.8c0 2.5.7 4.9 2 7L3 29l6.4-2c2 1.1 4.3 1.7 6.6 1.7 7.2 0 13-5.7 13-12.8S23.2 3 16 3zm0 23.4c-2.1 0-4.1-.6-5.9-1.7l-.4-.3-3.8 1.2 1.2-3.7-.3-.4c-1.2-1.8-1.9-3.9-1.9-6 0-5.9 4.9-10.6 11-10.6s11 4.8 11 10.6-4.9 10.9-10.9 10.9zm6-7.9c-.3-.2-1.9-1-2.2-1.1-.3-.1-.5-.2-.7.2-.2.3-.8 1-1 1.2-.2.2-.4.2-.7.1-.3-.2-1.4-.5-2.6-1.6-1-.9-1.6-1.9-1.8-2.2-.2-.3 0-.5.1-.7l.5-.6c.2-.2.2-.4.3-.6.1-.2 0-.4 0-.6l-1-2.4c-.3-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.3-1.2 1.1-1.2 2.7s1.2 3.2 1.4 3.4c.2.2 2.4 3.6 5.8 5 .8.3 1.4.5 1.9.7.8.3 1.5.2 2.1.1.6-.1 1.9-.8 2.2-1.5.3-.7.3-1.4.2-1.5-.1-.2-.3-.3-.6-.4z"/></svg>Abrir WhatsApp</button>');
+    var inp = document.getElementById('wa-hora'), prev = document.getElementById('wa-prev');
+    var pintarPrev = function () { prev.textContent = textoAviso(c, inp.value || hora); };
+    inp.oninput = pintarPrev; pintarPrev();
+    document.getElementById('wa-ir').onclick = function () {
+      var url = 'https://wa.me/' + tel + '?text=' + encodeURIComponent(textoAviso(c, inp.value || hora));
+      window.open(url, '_blank');
+      // Registro del aviso (el Tablero cuenta los avisos de cada chofer).
+      var av = leer('ldAppAvisos', {}), k = DIA + '|' + st.pat, prev = (av[k] || {})[cod];
+      var rec = { tLocal: Date.now(), hora: inp.value || hora, veces: (prev && prev.veces || 0) + 1 };
+      av = {}; av[k] = Object.assign({}, (leer('ldAppAvisos', {})[k] || {})); av[k][cod] = rec; // solo se guarda el día y camión actuales
+      guardar('ldAppAvisos', av);
+      fb.encolar('patch', 'dias/' + DIA + '/sesiones/' + st.pat + '/avisos/' + cod, { tLocal: rec.tLocal, hora: rec.hora, veces: rec.veces, t: fb.AHORA });
+      cerrarHoja();
+      pintarTodo();
+    };
+  }
 
   // ---------- visita no concretada (el modulador decide si se re-visita) ----------
   var MOTIVOS_NC = ['Cerrado', 'Camino intransitable'];

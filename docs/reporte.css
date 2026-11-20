@@ -580,3 +580,4 @@ body.otro-dia .ahora,body.otro-dia .tag.a{display:none}
 .ch-monto em{font-style:normal}
 .ch-items{margin:0;padding-left:16px}
 .ch-items li{margin:1px 0}
+.av-chip{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:10px;background:#DCF8C6;color:#13612F;font-size:12px;font-weight:700;white-space:nowrap;vertical-align:1px}

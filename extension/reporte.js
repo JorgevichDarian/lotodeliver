@@ -410,6 +410,7 @@
       c.n = x && x.n != null ? x.n : null;
       c.demora = x && x.demora != null ? x.demora : null;
       c.enCliente = x && x.enCliente ? x.enCliente : null;
+      c.aviso = x && x.aviso ? x.aviso : null;
       c.nc = x && x.nc ? x.nc : null;
       c.est = c.rechazado ? 'rechazado' : c.parcial ? 'parcial' : c.entregado ? 'entregado' : '';
       var s = x && estadoNextbyn(x.estado);
@@ -725,7 +726,7 @@
     if (dc) return cruzar(dc, nbCli);
     return Object.keys(nbCli).map(function (id) {
       var x = nbCli[id];
-      return { codigo: id.indexOf('N:') ? id : '', cliente: (id.indexOf('N:') ? id + ' - ' : '') + x.nombre, domicilio: x.domicilio, nbEstado: x.estado, motivos: x.motivo ? [x.motivo] : [], horaNb: x.hora || null, seq: x.seq != null ? x.seq : null, n: x.n != null ? x.n : null, demora: x.demora != null ? x.demora : null, enCliente: x.enCliente || null, optPos: x.optPos || null, nc: x.nc || null, leidoNextbyn: true, est: estadoNextbyn(x.estado) };
+      return { codigo: id.indexOf('N:') ? id : '', cliente: (id.indexOf('N:') ? id + ' - ' : '') + x.nombre, domicilio: x.domicilio, nbEstado: x.estado, motivos: x.motivo ? [x.motivo] : [], horaNb: x.hora || null, seq: x.seq != null ? x.seq : null, n: x.n != null ? x.n : null, demora: x.demora != null ? x.demora : null, enCliente: x.enCliente || null, aviso: x.aviso || null, optPos: x.optPos || null, nc: x.nc || null, leidoNextbyn: true, est: estadoNextbyn(x.estado) };
     });
   }
   function pct(a, b) { return b ? Math.round((a / b) * 100) + '%' : '—'; }
@@ -767,6 +768,15 @@
   function optDe(pat) {
     var cam = nb && nb.cams && nb.cams.filter(function (x) { return String(x.patente).toUpperCase() === pat; })[0];
     return cam && cam.optimo ? cam.optimo : null;
+  }
+  function chipAviso(c) {
+    return c.aviso ? '<span class="av-chip" title="' + esc('El chofer avisó por WhatsApp a las ' + hhmm(c.aviso.t) + ' que llegaba a las ' + c.aviso.hora + (c.aviso.veces > 1 ? ' (' + c.aviso.veces + ' avisos)' : '')) + '">Avisado ' + hhmm(c.aviso.t) + '</span>' : '';
+  }
+  function resumenAvisos(lista) {
+    if (!modoApp()) return '';
+    var av = lista.filter(function (c) { return c.aviso; }), vis = lista.filter(function (c) { return c.est; }), visAv = vis.filter(function (c) { return c.aviso; });
+    return '<span class="ot-res" title="Avisos de próximo cliente enviados por WhatsApp desde la app (el chofer abre el mensaje y lo envía)">Avisos WhatsApp <b>' + av.length + '</b> <small>' +
+      (vis.length ? visAv.length + ' de ' + vis.length + ' visitados fueron avisados' : 'de ' + lista.length + ' clientes') + '</small></span>';
   }
   function posOptimo(c) { return !c.est && c.optPos ? '<span class="opt-pos" title="Orden en la ruta óptima que calculó la app">' + c.optPos + '.º en ruta óptima</span>' : ''; }
   // ---------- demora en el cliente (check-in de la app → estado de la visita) ----------
@@ -897,9 +907,9 @@
       if (!ids.length) return '<div class="dres">' + msg + '</div>';
       var lista = listaClientes(pat);
       ordenarClientes(pat, lista, ahora);
-      return '<div class="dres"><span>' + msg + '</span><span>Clientes <b>' + lista.length + '</b></span><span>Entregados <b>' + lista.filter(function (c) { return c.est === 'entregado'; }).length + '</b></span>' + resumenOT(otDeCamion(pat, ahora)) + resumenOptimo(pat) + resumenDemora(lista) + resumenRiesgo(pat, ahora) + avisoOT() + '</div>' +
+      return '<div class="dres"><span>' + msg + '</span><span>Clientes <b>' + lista.length + '</b></span><span>Entregados <b>' + lista.filter(function (c) { return c.est === 'entregado'; }).length + '</b></span>' + resumenOT(otDeCamion(pat, ahora)) + resumenOptimo(pat) + resumenDemora(lista) + resumenAvisos(lista) + resumenRiesgo(pat, ahora) + avisoOT() + '</div>' +
         '<div class="tabla-cli"><table class="cli"><thead><tr><th>Estado</th><th>Cliente</th><th class="h-ot">Ventana y entrega</th><th class="h-dem">Demora</th><th class="h-pago">Pago pendiente</th><th class="h-dom">Domicilio</th></tr></thead><tbody>' +
-        lista.map(function (c) { var r = evaluarOT(pat, c, ahora); return '<tr><td>' + pillEstado(c) + '</td><td><b>' + esc(c.cliente) + '</b>' + posOptimo(c) + notaVentana(r) + '</td><td class="h-ot">' + lineaCliente(r, E, ahora) + '</td><td class="h-dem">' + celdaDemora(c) + '</td><td class="h-pago">' + pillPago(c) + '</td><td class="h-dom">' + esc(c.domicilio) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+        lista.map(function (c) { var r = evaluarOT(pat, c, ahora); return '<tr><td>' + pillEstado(c) + '</td><td><b>' + esc(c.cliente) + '</b>' + posOptimo(c) + chipAviso(c) + notaVentana(r) + '</td><td class="h-ot">' + lineaCliente(r, E, ahora) + '</td><td class="h-dem">' + celdaDemora(c) + '</td><td class="h-pago">' + pillPago(c) + '</td><td class="h-dom">' + esc(c.domicilio) + '</td></tr>'; }).join('') + '</tbody></table></div>';
     }
 
     // Con Chess: cruza cada cliente con su estado en Nextbyn.
@@ -912,13 +922,13 @@
       '<span>Clientes <b>' + cs.length + '</b></span><span>Entregados <b>' + nEnt + '</b></span>' + (nRe ? '<span>Rechazos <b>' + nRe + '</b></span>' : '') +
       '<span>Importe <b>' + plata(dc.importe) + '</b></span><span>Bultos <b>' + Math.round(dc.bultos) + '</b></span>' +
       '<span>Cajones retornables <b>' + Math.round(dc.cajones) + '</b></span>' +
-      (hayNb ? '' : '<span>Sin estados de Nextbyn: el estado sale de Chess.</span>') + resumenOT(otDeCamion(pat, ahora)) + resumenOptimo(pat) + resumenDemora(cs) + resumenRiesgo(pat, ahora) + avisoOT() + '</div>' +
+      (hayNb ? '' : '<span>Sin estados de Nextbyn: el estado sale de Chess.</span>') + resumenOT(otDeCamion(pat, ahora)) + resumenOptimo(pat) + resumenDemora(cs) + resumenAvisos(cs) + resumenRiesgo(pat, ahora) + avisoOT() + '</div>' +
       '<div class="tabla-cli"><table class="cli"><thead><tr><th>Estado</th><th>Cliente</th><th class="h-ot">Ventana y entrega</th><th class="h-dem">Demora</th><th class="h-pago">Pago pendiente</th><th class="h-dom">Domicilio</th><th class="h-loc">Localidad</th><th class="h-comp">Comprobante</th><th class="n">Importe</th><th class="n">Bultos</th><th class="n">Cajones</th></tr></thead><tbody>';
     cs.forEach(function (c) {
       var k = pat + '|' + c.cliente, abierto = !!clientesAbiertos[k], rOT = evaluarOT(pat, c, ahora);
       h += '<tr class="cl" data-cl="' + esc(k) + '"><td>' + pillEstado(c) +
         (c.motivos && c.motivos.length ? '<span class="motivo">' + esc(c.motivos.join(', ')) + '</span>' : '') +
-        '</td><td><span class="car' + (abierto ? ' rot' : '') + '">▸</span><b>' + esc(c.cliente) + '</b>' + posOptimo(c) + notaVentana(rOT) + '</td><td class="h-ot">' + lineaCliente(rOT, E, ahora) + '</td><td class="h-dem">' + celdaDemora(c) + '</td><td class="h-pago">' + pillPago(c) + '</td><td class="h-dom">' + esc(c.domicilio) + '</td><td class="h-loc">' + esc(c.localidad) +
+        '</td><td><span class="car' + (abierto ? ' rot' : '') + '">▸</span><b>' + esc(c.cliente) + '</b>' + posOptimo(c) + chipAviso(c) + notaVentana(rOT) + '</td><td class="h-ot">' + lineaCliente(rOT, E, ahora) + '</td><td class="h-dem">' + celdaDemora(c) + '</td><td class="h-pago">' + pillPago(c) + '</td><td class="h-dom">' + esc(c.domicilio) + '</td><td class="h-loc">' + esc(c.localidad) +
         '</td><td class="h-comp" style="font-size:13px">' + esc(c.comprobantes.join(', ')) + '</td><td class="n">' + plata(c.importe) + '</td><td class="n">' + num(c.bultos) + '</td><td class="n">' + num(c.cajones) + '</td></tr>';
       if (abierto) {
         h += '<tr class="prod"><td colspan="11">' + detalleProductos(c) + '</td></tr>';
@@ -1015,6 +1025,7 @@
         var f = cumplimientoFlota();
         return '<p class="pie opt-flota ' + nivelCump(f) + '" title="Visitas hechas en el orden de la ruta óptima calculada en la app, sobre las visitas hechas después de calcularla">Cumplimiento ruta óptima <b>' + pct(f.ok, f.n) + '</b> ' +
           (f.n ? f.ok + ' de ' + f.n + ' visitas en orden' : 'sin visitas con ruta óptima') + ' · ' + f.con + ' de ' + f.cam + ' camiones la calcularon</p>' +
+          (function () { var n = 0, cams = 0; ((nb && nb.cams) || []).forEach(function (x) { if (x.avisos) { n += x.avisos; cams++; } }); return '<p class="pie" title="Avisos de próximo cliente enviados por WhatsApp desde la app">Avisos WhatsApp <b>' + n + '</b> ' + (n ? 'de ' + cams + (cams === 1 ? ' camión' : ' camiones') : 'todavía ninguno') + '</p>'; })() +
           (function () { var d = demoraFlota(), lim = +cfg.demora || 10; return '<p class="pie" title="Promedio real entre el check-in y el estado de la visita en la app">Demora por cliente <b>' + fmtMin(lim) + '</b> · actual <b class="' + (d.prom == null ? '' : d.prom > lim * 1.5 ? 'mal' : d.prom > lim ? 'medio' : 'bien') + '">' + (d.prom == null ? '—' : fmtMin(d.prom)) + '</b> ' + (d.n ? d.n + ' visitas con check-in' : 'sin check-in todavía') + '</p>'; })();
       })() : '') + '</div>' +
       // OT

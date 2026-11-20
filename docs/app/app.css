@@ -218,3 +218,12 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--naranja)
 .fila-sku select,.fila-sku input{min-width:0}
 .fila-sku .s-quitar{width:44px;height:44px}
 .d-items{margin:4px 0 0;padding-left:18px;font-size:14px}
+
+/* descuento (amarillo) y aviso por WhatsApp */
+.btn.amarillo{background:#F6C445;color:#3A2A00;border-color:#E2AE22}
+.btn.wa{background:#25D366;color:#fff;display:flex;align-items:center;justify-content:center;gap:10px}
+.btn.wa[disabled]{background:#E7EAEE;color:#6B7380}
+.wa-ico{width:24px;height:24px;flex:none}
+.wa-prev{background:#DCF8C6;color:#1F2A1A;border-radius:12px 12px 12px 4px;padding:12px 14px;font-size:16px;line-height:1.45;margin:6px 0 14px;white-space:pre-wrap}
+.ya.avisado{background:#DCF8C6;color:#13612F}
+.cli-av{display:block;margin-top:3px;font-size:13px;font-weight:700;color:#13612F}

@@ -157,6 +157,7 @@
           nombre: x.nombre, domicilio: x.domicilio, estado: est, hora: v ? v.tLocal || v.t : null, seq: posOpt[cod] || x.n, n: x.n, optPos: posOpt[cod] || null,
           demora: v && v.demora != null ? v.demora : null,
           enCliente: !v && s && s.checkin && s.checkin.cod === cod && !s.fin ? s.checkin.tIn : null,
+          aviso: s && s.avisos && s.avisos[cod] ? { t: s.avisos[cod].tLocal, hora: s.avisos[cod].hora, veces: s.avisos[cod].veces || 1 } : null,
           nc: !v && st.nc[pat] && st.nc[pat][cod] ? { estado: st.nc[pat][cod].estado, motivo: st.nc[pat][cod].motivo, nota: st.nc[pat][cod].nota || '', t: st.nc[pat][cod].tLocal } : null,
           motivo: v ? [v.motivo, v.nota].filter(Boolean).join(': ') : '', fuente: 'app',
         };
@@ -167,6 +168,7 @@
         patente: pat, estado: !s ? 'SIN INICIAR' : s.fin ? 'CERRADA' : 'ABIERTA',
         vehiculo: s ? 'App: ' + (s.nombre || s.usuario) : 'Sin chofer en la app', inicio: s && s.inicio ? s.inicio : null,
         entregados: c.e, parciales: c.p, rechazos: c.r, pendientes: c.pend, hechos: c.e + c.p + c.r, total: c.e + c.p + c.r + c.pend, pct: null,
+        avisos: s && s.avisos ? Object.keys(s.avisos).length : 0,
         optimo: ult ? { cump: cumplimiento(pat, vis), at: ult.tLocal, km: ult.km, fin: ult.fin, nTarde: ult.nTarde, planes: P.length } : null,
       });
     });
@@ -206,7 +208,7 @@
           n: i + 1, nombre: String(c.cliente).replace(/^\s*\d+\s*-\s*/, ''), domicilio: c.domicilio || '', localidad: c.localidad || '',
           ll: v && v.ll ? v.ll : null, ventana: textoVentana(v), tel: v && v.tel && v.tel.length ? v.tel : null,
           pago: v ? (v.pago === 'cc' ? 'Autorizado (cta. corriente)' : v.pago ? 'Autorizado' : 'No autorizado') : null,
-          facturas: fl,
+          facturas: fl, importe: Math.round(+c.importe || 0), cajones: Math.round(+c.cajones || 0),
         };
       });
       out[pat] = { pat: pat, chofer: String(dc.chofer || '').replace(/^\d+\s*-\s*/, ''), clientes: clientes };
@@ -464,11 +466,11 @@
     var h = '<p class="ch-sub">' + (publicando ? 'Publicando la hoja de ruta…' : st.pub.dia === DIA ? 'Hoja de ruta publicada a las ' + hhmm(st.pub.at) + ' (' + st.pub.n + ' camiones). Se vuelve a publicar sola cuando cambia Chess.' : 'La hoja de ruta se publica sola cada vez que el Tablero lee Chess.') + '</p>';
     if (!pats.length) h += '<p class="ch-vacio">Todavía no hay hoja de ruta publicada hoy. Tocá <b>Chess</b> o <b>Actualizar todo</b> arriba.</p>';
     else {
-      h += '<table class="ch-tabla"><thead><tr><th>Camión</th><th>Chofer en la app</th><th class="n">Visitados</th><th>GPS</th></tr></thead><tbody>' + pats.map(function (p) {
+      h += '<table class="ch-tabla"><thead><tr><th>Camión</th><th>Chofer en la app</th><th class="n">Visitados</th><th class="n" title="Avisos de próximo cliente enviados por WhatsApp">Avisos WA</th><th>GPS</th></tr></thead><tbody>' + pats.map(function (p) {
         var s = st.sesiones[p], g = st.gps[p], vis = st.visitas[p] || {}, tot = Object.keys(rutas[p].clientes || {}).length;
         var viejo = g && Date.now() - (g.tLocal || g.t) > 10 * 6e4;
         return '<tr><td>' + chapa(p) + '</td><td>' + (s ? esc(s.nombre || s.usuario) + '<span class="ch-sub">' + (s.fin ? 'Cerró ' + hhmm(s.fin) : 'Desde ' + hhmm(s.inicio)) + '</span>' : '<span class="ch-sub">Sin iniciar</span>') + '</td>' +
-          '<td class="n">' + Object.keys(vis).length + '/' + tot + '</td><td>' + (g ? '<span class="ch-gps' + (viejo ? ' viejo' : '') + '">' + hace(g.tLocal || g.t) + '</span>' : '<span class="ch-sub">—</span>') + '</td></tr>';
+          '<td class="n">' + Object.keys(vis).length + '/' + tot + '</td><td class="n">' + (s && s.avisos ? Object.keys(s.avisos).length : 0) + '</td><td>' + (g ? '<span class="ch-gps' + (viejo ? ' viejo' : '') + '">' + hace(g.tLocal || g.t) + '</span>' : '<span class="ch-sub">—</span>') + '</td></tr>';
       }).join('') + '</tbody></table>';
     }
     el.innerHTML = h;
