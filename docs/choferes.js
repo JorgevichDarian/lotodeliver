@@ -72,7 +72,7 @@
   // ---------- demora estimada por cliente ----------
   // demoras/{cliente}/{id} = { d (min), dia, pat }: muestras de check-in → entrega.
   // demoraManual/{cliente} = { min, por, t }: valor fijado por el modulador (manda sobre el historial).
-  var MUESTRAS = 10;
+  var MUESTRAS = 10, demVer = 0;
   function leerDemoras() {
     if (!fb || !fb.sesion()) return;
     Promise.all([fb.get('demoras'), fb.get('demoraManual')]).then(function (r) {
@@ -87,7 +87,7 @@
         if (s.length >= 5) s = s.slice(1, -1);
         est[cod] = { prom: s.reduce(function (a, b) { return a + b; }, 0) / s.length, n: m.length };
       });
-      st.demEst = est; st.demMan = r[1] || {};
+      st.demEst = est; st.demMan = r[1] || {}; demVer++;
       if (api.alCambiar) api.alCambiar();
     }, function () { /* sin permiso todavía: se usa la demora general */ });
   }
@@ -425,12 +425,14 @@
       var e = st.demEst && st.demEst[cod];
       return e ? { min: e.prom, fuente: 'historial', n: e.n, hist: e.prom } : null;
     },
+    demVersion: function () { return demVer; },
     puedeEditarDemora: function () { return !!(fb && fb.sesion() && esModulador()); },
     guardarDemora: function (cod, min) {
       var p = min == null ? fb.del('demoraManual/' + cod) : fb.put('demoraManual/' + cod, { min: min, por: st.perfil.nombre || fb.sesion().usuario, t: fb.AHORA });
       return p.then(function () {
         st.demMan = st.demMan || {};
         if (min == null) delete st.demMan[cod]; else st.demMan[cod] = { min: min };
+        demVer++;
         if (api.alCambiar) api.alCambiar();
       });
     },

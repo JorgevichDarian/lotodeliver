@@ -369,7 +369,7 @@
   // ---------- clientes de un camión ----------
   function estadoNextbyn(s) {
     if (/RECHAZO.*PARCIAL|PARCIAL/.test(s)) return 'parcial';
-    if (/^RECHAZO/.test(s)) return 'rechazado';
+    if (/^RECHAZ/.test(s)) return 'rechazado'; // RECHAZO (Nextbyn) o RECHAZADO (app de choferes)
     if (/^ENTREGA/.test(s)) return 'entregado';
     return '';
   }
@@ -652,41 +652,60 @@
   // de hoy (si hay al menos 3 con hora); si no, el ritmo del camión desde que salió.
   var cacheProy = {};
   function claveCli(c) { return c.codigo || c.cliente; }
+  // Llegada estimada a cada pendiente, en el orden de la secuencia (ruta óptima de la app u hoja de ruta):
+  // se parte de la última visita (o del cliente con check-in abierto, o del CD si todavía no visitó a nadie)
+  // y se suma el manejo entre clientes (línea recta × 1,3 a 25 km/h) más la demora de cada cliente
+  // (fijada a mano, la de su historial de check-in o la general).
   function proyeccion(pat, ahora) {
-    var k = pat + '|' + (nb && nb.at) + '|' + (ch && ch.at) + '|' + (vt && vt.at) + '|' + Math.floor(ahora / 6e4);
+    var dv = window.LTChoferes && LTChoferes.demVersion ? LTChoferes.demVersion() : 0;
+    var k = pat + '|' + (nb && nb.at) + '|' + (ch && ch.at) + '|' + (vt && vt.at) + '|' + Math.floor(ahora / 6e4) + '|' + dv + '|' + cfg.demora + '|' + cfg.cdLL;
     if (cacheProy[k]) return cacheProy[k];
     var lista = listaClientes(pat), res = { porCli: {}, riesgo: 0, justo: 0, m: null };
-    var horas = lista.map(function (c) { var h = horaEntrega(pat, c); return h && h.t; }).filter(Boolean).sort(function (a, b) { return a - b; });
-    var m = null;
-    if (horas.length >= 3) { var u = horas.slice(-6); m = (u[u.length - 1] - u[0]) / (u.length - 1) / 6e4; }
-    if (!m || m < 3) {
+    var llDe = function (c) { var v = vt && vt.mapa && c.codigo ? vt.mapa[c.codigo] : null; return v && v.ll ? v.ll : null; };
+    // Punto de partida: la última visita con hora.
+    var ult = null;
+    lista.forEach(function (c) { if (!c.est) return; var h = horaEntrega(pat, c); if (h && h.t && (!ult || h.t > ult.t)) ult = { t: +new Date(h.t), ll: llDe(c) }; });
+    var t, pos;
+    if (ult) { t = Math.max(ahora.getTime(), ult.t); pos = ult.ll || cfg.cdLL; }
+    else {
       var cam = nb && nb.cams.filter(function (x) { return String(x.patente).toUpperCase() === pat; })[0];
-      m = cam && cam.hechos && cam.inicio ? (ahora - cam.inicio) / 6e4 / cam.hechos : 20;
+      var ini = cam && cam.inicio ? new Date(cam.inicio) : null;
+      if (!ini || ini.getHours() < 4) ini = aHora(ahora, ventanaApertura(ahora)[0]);
+      t = Math.max(ahora.getTime(), ini.getTime()); pos = cfg.cdLL;
     }
-    m = Math.max(5, Math.min(90, m));
-    res.m = m;
     var pend = lista.filter(function (c) { return !c.est; });
     pend.sort(function (a, b) {
+      if (a.enCliente || b.enCliente) return (b.enCliente ? 1 : 0) - (a.enCliente ? 1 : 0); // el que tiene check-in va primero
       var sa = a.seq == null ? 1e9 : a.seq, sb = b.seq == null ? 1e9 : b.seq;
       return sa - sb || String(a.cliente).localeCompare(b.cliente);
     });
-    var ultima = horas.length ? horas[horas.length - 1] : 0;
-    var base = Math.max(ahora.getTime(), ultima + m * 6e4);
+    var sumaDem = 0;
     pend.forEach(function (c, i) {
-      var eta = base + i * m * 6e4, v = vt && vt.mapa && c.codigo ? vt.mapa[c.codigo] : null, f = v ? v.f : [];
+      var ll = llDe(c), dem = demoraPlan(c.codigo).min, eta;
+      if (c.enCliente) { eta = c.enCliente; t = Math.max(ahora.getTime(), c.enCliente + dem * 6e4); }
+      else {
+        if (pos && ll) t += kmEntre(pos, ll) / VEL_KMH * 36e5;
+        eta = t;
+        t += dem * 6e4;
+      }
+      if (ll) pos = ll;
+      sumaDem += dem;
+      var v = vt && vt.mapa && c.codigo ? vt.mapa[c.codigo] : null, f = v ? v.f : [];
       var dias = Math.floor((new Date(eta).setHours(0, 0, 0, 0) - new Date(ahora).setHours(0, 0, 0, 0)) / 864e5);
       var em = minDelDia(eta) + dias * 1440, riesgo = 'sin';
       if (f.length && minDelDia(ahora) > f[f.length - 1][1]) riesgo = 'vencido'; // ya se perdió: no cuenta como riesgo
       else if (f.length) {
         var dentro = f.filter(function (x) { return em >= x[0] && em <= x[1]; })[0];
-        if (dentro) riesgo = dentro[1] - em < m ? 'justo' : 'ok';
+        if (dentro) riesgo = dentro[1] - em < dem ? 'justo' : 'ok';
         else if (f.some(function (x) { return x[0] > em; })) riesgo = 'antes';
         else riesgo = 'riesgo';
       }
       if (riesgo === 'riesgo') res.riesgo++;
       if (riesgo === 'justo') res.justo++;
-      res.porCli[claveCli(c)] = { eta: eta, riesgo: riesgo, pos: i + 1, m: m };
+      res.porCli[claveCli(c)] = { eta: eta, riesgo: riesgo, pos: i + 1, m: dem, enCliente: !!c.enCliente };
     });
+    res.m = pend.length ? sumaDem / pend.length : +cfg.demora || 10;
+    res.fin = pend.length ? new Date(t + (pos && cfg.cdLL ? kmEntre(pos, cfg.cdLL) / VEL_KMH * 36e5 : 0)) : null;
     if (Object.keys(cacheProy).length > 200) cacheProy = {};
     cacheProy[k] = res;
     return res;
@@ -733,7 +752,7 @@
   }
   var TXT_RIESGO = { riesgo: 'En riesgo', justo: 'Justo', antes: 'Llega antes', ok: 'Pendiente', sin: 'Pendiente' };
   function tituloOT(r) {
-    var t = (r.eta && r.st === 'pend' ? TXT_RIESGO[r.riesgo] + '. Llegada estimada ' + hhmm(r.eta) + ' (' + r.pos + '.º en la secuencia de Nextbyn, ' + Math.round(r.minCli) + ' min por cliente)' : TXT_OT[r.st]) + '. Ventana: ' + (r.f.length ? textoVentana(r.f) : 'sin ventana (el OT se da por cumplido)');
+    var t = (r.eta && r.st === 'pend' ? TXT_RIESGO[r.riesgo] + '. Llegada estimada ' + hhmm(r.eta) + ' (' + r.pos + '.º en la secuencia; demora de este cliente ' + fmtMin(r.minCli) + ', manejo a ' + VEL_KMH + ' km/h)' : TXT_OT[r.st]) + '. Ventana: ' + (r.f.length ? textoVentana(r.f) : 'sin ventana (el OT se da por cumplido)');
     if (r.h) t += '. Entrega: ' + hhmm(r.h.t) + (r.h.fuente === 'reporte' ? ' (hora en que el reporte vio el cambio)' : r.h.fuente === 'chess' ? ' (liquidación de Chess' + (r.h.prox ? ', a ' + Math.round(r.h.prox) + ' m del cliente' : '') + ')' : ' (Nextbyn)');
     if (r.st === 'sinhora') t += '. Ni la liquidación de Chess ni Nextbyn informan la hora de esta entrega.';
     return t;
@@ -742,7 +761,7 @@
     var p = proyeccion(pat, ahora);
     if (!p || (!p.riesgo && !p.justo && !Object.keys(p.porCli).length)) return '';
     var fuente = nb && nb.fuente === 'app' ? 'orden de la hoja de ruta publicada para la app' : nb && nb.cli && nb.cli.colSeq ? 'columna ' + nb.cli.colSeq + ' de Nextbyn' : 'orden de la lista de Clientes de Nextbyn';
-    return '<span class="ot-res" title="' + esc('Secuencia: ' + fuente + '. Tiempo por cliente: ' + Math.round(p.m) + ' min (últimas entregas de hoy o ritmo del camión).') + '">En riesgo <b>' + p.riesgo + '</b> <small>' + (p.justo ? p.justo + ' justos, ' : '') + Math.round(p.m) + ' min por cliente</small></span>';
+    return '<span class="ot-res" title="' + esc('Secuencia: ' + fuente + '. Llegadas: desde la última visita, manejo entre clientes a ' + VEL_KMH + ' km/h más la demora de cada cliente (promedio ' + fmtMin(p.m) + ').') + '">En riesgo <b>' + p.riesgo + '</b> <small>' + (p.justo ? p.justo + ' justos, ' : '') + 'demora prom. ' + fmtMin(p.m) + (p.fin ? ' · vuelve al CD ~' + hhmm(p.fin) : '') + '</small></span>';
   }
   // ---------- ruta óptima de la app: orden de los pendientes y cumplimiento ----------
   function optDe(pat) {
