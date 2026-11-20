@@ -92,13 +92,18 @@
       return base + '/' + String(ruta || '').replace(/^\/+|\/+$/g, '') + '.json?auth=' + encodeURIComponent(token) + (extra || '');
     }
     function pedir(metodo, ruta, valor, extra) {
+      var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, tope = null;
       return fb.token().then(function (t) {
+        // Si Firebase no contesta en 30 s, se corta: así un botón nunca queda trabado.
+        if (ctl) tope = setTimeout(function () { ctl.abort(); }, 30000);
         return fetch(url(ruta, t, extra), {
           method: metodo,
           headers: valor === undefined ? {} : { 'Content-Type': 'application/json' },
           body: valor === undefined ? undefined : JSON.stringify(valor),
           cache: 'no-store',
-        });
+          signal: ctl ? ctl.signal : undefined,
+        }).catch(function (e) { throw new Error(e && e.name === 'AbortError' ? 'Firebase no respondió a tiempo. Probá de nuevo.' : 'Sin conexión con Firebase.'); })
+          .finally(function () { clearTimeout(tope); });
       }).then(function (r) {
         return r.json().catch(function () { return null; }).then(function (j) { if (!r.ok) throw errorFirebase(j, r.status); return j; });
       });

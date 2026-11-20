@@ -38,12 +38,20 @@
     cerrar();
     var d = 'dias/' + DIA + '/';
     var err = function (e) { st.error = e.message; pintar(); };
+    // Una sola conexión en vivo para todo el día. El navegador abre como mucho 6 conexiones a la vez
+    // con Firebase: con una por cada dato (visitas, sesiones, GPS, …) se llenaban y los guardados
+    // (publicar la hoja de ruta, responder avisos) quedaban esperando para siempre.
+    var firmas = {};
+    function cambio(k, v) { var f = JSON.stringify(v || {}); if (firmas[k] === f) return false; firmas[k] = f; return true; }
     oyentes = [
-      fb.escuchar(d + 'visitas', function (v) { st.visitas = v || {}; avisarCambio(); }, err),
-      fb.escuchar(d + 'sesiones', function (v) { st.sesiones = v || {}; avisarCambio(); }, err),
-      fb.escuchar(d + 'optimo', function (v) { st.optimo = v || {}; avisarCambio(); }, err),
-      fb.escuchar(d + 'noconcretadas', function (v) { st.nc = v || {}; pintarBadge(); pintarNC(); avisarCambio(); }, err),
-      fb.escuchar(d + 'gps', function (v) { st.gps = v || {}; if (api.alGps) api.alGps(); pintarCamiones(); }, err),
+      fb.escuchar('dias/' + DIA, function (v) {
+        v = v || {};
+        var cv = cambio('visitas', v.visitas), cs = cambio('sesiones', v.sesiones), co = cambio('optimo', v.optimo), cn = cambio('nc', v.noconcretadas), cg = cambio('gps', v.gps);
+        st.visitas = v.visitas || {}; st.sesiones = v.sesiones || {}; st.optimo = v.optimo || {}; st.nc = v.noconcretadas || {}; st.gps = v.gps || {};
+        if (cn) { pintarBadge(); pintarNC(); }
+        if (cg) { if (api.alGps) api.alGps(); pintarCamiones(); }
+        if (cv || cs || co || cn) avisarCambio();
+      }, err),
       fb.escuchar('descuentos', function (v) { st.desc = v || {}; pintarBadge(); pintarDescuentos(); }, err, '&orderBy=' + encodeURIComponent('"dia"') + '&equalTo=' + encodeURIComponent('"' + DIA + '"')),
     ];
     leerRutas();
