@@ -260,7 +260,7 @@
   }
   function verVista(v, desdeAtras) {
     // Botón "atrás" del celular: Mapa y Descuentos vuelven a Clientes.
-    if (!desdeAtras && v !== 'clientes' && st.vista === 'clientes') history.pushState({ lt: 'vista' }, '');
+    if (!desdeAtras && v !== 'clientes' && st.vista === 'clientes') { if (enBase) { enBase = false; history.pushState({ lt: 'app' }, ''); } history.pushState({ lt: 'vista' }, ''); }
     else if (!desdeAtras && v === 'clientes' && st.vista !== 'clientes' && history.state && history.state.lt === 'vista') { history.back(); return; }
     st.vista = v;
     ['clientes', 'mapa', 'desc'].forEach(function (k) { document.getElementById('v-' + (k === 'desc' ? 'desc' : k)).hidden = k !== v; });
@@ -952,23 +952,26 @@
   // ---------- botón "atrás" del celular ----------
   // Cada hoja (ficha, formularios) y cada vista secundaria agregan un paso al historial: "atrás" la cierra
   // en lugar de salir de la app. En la pantalla principal hay que tocar "atrás" dos veces para salir.
-  var hojaEnHistorial = false, ultimoAtras = 0, ignorarPop = false;
+  var hojaEnHistorial = false, ignorarPop = false, enBase = false;
   history.replaceState({ lt: 'base' }, '');
   history.pushState({ lt: 'app' }, '');
+  // Después del primer "atrás" en la pantalla principal la app queda en el primer paso del historial:
+  // el próximo "atrás" sale. Si en cambio el chofer sigue usando la app, se vuelve a poner el resguardo.
+  document.addEventListener('pointerdown', function () {
+    if (enBase) { enBase = false; history.pushState({ lt: 'app' }, ''); }
+  }, true);
   window.addEventListener('popstate', function (e) {
     var est = e.state && e.state.lt;
     if (ignorarPop) { ignorarPop = false; return; } // lo disparó cerrarHoja() al sacar su paso del historial
     if (!$hoja.hidden) { hojaEnHistorial = false; cerrarHojaUI(); if (est === 'hoja') history.back(); return; }
     if (st.pat && st.vista !== 'clientes') { verVista('clientes', true); return; }
-    if (est === 'base') {
-      if (Date.now() - ultimoAtras < 2500) { history.back(); return; } // segundo "atrás": sale
-      ultimoAtras = Date.now();
-      history.pushState({ lt: 'app' }, '');
-      avisar('Tocá atrás de nuevo para salir de la app.');
-    }
+    if (est === 'base') { enBase = true; avisar('Tocá atrás de nuevo para salir de la app.'); }
   });
   function abrirHoja(html) {
-    if ($hoja.hidden && !hojaEnHistorial) { history.pushState({ lt: 'hoja' }, ''); hojaEnHistorial = true; }
+    if ($hoja.hidden && !hojaEnHistorial) {
+      if (enBase) { enBase = false; history.pushState({ lt: 'app' }, ''); }
+      history.pushState({ lt: 'hoja' }, ''); hojaEnHistorial = true;
+    }
     $hoja.innerHTML = '<div class="hoja-fondo" data-cerrar></div><div class="hoja-panel" role="dialog" aria-modal="true">' + html + '</div>';
     $hoja.hidden = false;
     document.body.classList.add('con-hoja');

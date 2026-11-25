@@ -38,9 +38,12 @@ fs.copyFileSync(path.join(__dirname, '..', 'seguimiento', 'index.html'), path.jo
 const appSrc = path.join(__dirname, '..', 'app'), appDst = path.join(docs, 'app');
 fs.mkdirSync(appDst, { recursive: true });
 for (const f of fs.readdirSync(appSrc)) fs.copyFileSync(path.join(appSrc, f), path.join(appDst, f));
+// Versión de la app: la de la extensión + un resumen del contenido, para que cada cambio de la app
+// cambie las direcciones de sus archivos y el celular no use una copia vieja.
+const appVer = version + '.' + require('crypto').createHash('sha1').update(['app.js', 'optimo.js', 'app.css'].map((f) => fs.readFileSync(path.join(appSrc, f), 'utf8')).join('|')).digest('hex').slice(0, 6);
 fs.writeFileSync(path.join(appDst, 'index.html'), fs.readFileSync(path.join(appDst, 'index.html'), 'utf8')
-  .replace(/(src|href)="((?:\.\.\/)?(?:vendor\/leaflet\/)?[\w-]+\.(?:js|css))"/g, '$1="$2?v=' + version + '"'));
-fs.writeFileSync(path.join(appDst, 'sw.js'), fs.readFileSync(path.join(appDst, 'sw.js'), 'utf8').replace("'choferes-lt-v1'", "'choferes-lt-" + version + "'"));
+  .replace(/(src|href)="((?:\.\.\/)?(?:vendor\/leaflet\/)?[\w-]+\.(?:js|css))"/g, '$1="$2?v=' + appVer + '"'));
+fs.writeFileSync(path.join(appDst, 'sw.js'), fs.readFileSync(path.join(appDst, 'sw.js'), 'utf8').replace("'choferes-lt-v1'", "'choferes-lt-" + appVer + "'"));
 
 // Zip de la extensión para descargar desde la guía.
 const zip = path.join(docs, 'lotodeliver-extension.zip');
