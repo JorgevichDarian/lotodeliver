@@ -287,7 +287,7 @@
         '<span class="n' + (usarOpt ? ' opt' : '') + '">' + (vis ? (vis.estado === 'modulado' ? '✕' : '✓') : usarOpt ? i + 1 : (c.n || '·')) + '</span>' +
         '<span class="cli-txt"><b>' + esc(c.nombre) + '</b><span>' + esc(c.domicilio || '') + (c.localidad ? ', ' + esc(c.localidad) : '') + '</span>' +
         (vis ? '<span class="cli-est">' + TXT_EST[vis.estado] + (vis.motivo ? ': ' + esc(vis.motivo) : '') + ' · ' + hhmm(vis.tLocal) + (st.local[c.codigo] ? ' · sin enviar' : '') + '</span>'
-          : '<span class="cli-ven">' + esc(c.ventana || 'Sin ventana') + '</span>' + (!c.vis && avisoDe(c.codigo) ? '<span class="cli-av">Avisado ' + hhmm(avisoDe(c.codigo).tLocal) + '</span>' : '') + (st.checkin && st.checkin.cod === c.codigo ? '<span class="cli-ci">En el cliente <b class="reloj-ci" data-t="' + st.checkin.tIn + '">' + reloj(st.checkin.tIn) + '</b></span>' : '') + lineaNC(c.codigo) + (usarOpt ? lineaLlegada(c, ll) : '')) +
+          : '<span class="cli-ven">' + esc(c.ventana || 'Sin ventana') + '</span>' + (!c.vis && (c.facturas || []).length ? '<span class="cli-cobrar">A cobrar ' + plata(totalCobrar(c)) + '</span>' : '') + (!c.vis && avisoDe(c.codigo) ? '<span class="cli-av">Avisado ' + hhmm(avisoDe(c.codigo).tLocal) + '</span>' : '') + (st.checkin && st.checkin.cod === c.codigo ? '<span class="cli-ci">En el cliente <b class="reloj-ci" data-t="' + st.checkin.tIn + '">' + reloj(st.checkin.tIn) + '</b></span>' : '') + lineaNC(c.codigo) + (usarOpt ? lineaLlegada(c, ll) : '')) +
         '</span><span class="cod">' + esc(c.codigo) + '</span></button></li>';
     }).join('') + '</ul>';
     v.innerHTML = h;
@@ -395,6 +395,13 @@
     return '<span class="cli-eta bien">' + t + (x.est === 'ok' ? ' · en ventana' : '') + '</span>';
   }
   function importeTxt(n) { return '$ ' + Math.round(+n || 0).toLocaleString('es-AR'); }
+  // ---------- total a cobrar: facturas menos notas de crédito ----------
+  function esNotaCredito(f) { return /NOTA\s*(DE\s*)?CR[EÉ]D|N\.?\s*CR[EÉ]D|^N\.?C\.?[\s\-]|CREDITO/i.test(String(f.nro || '')) || +f.importe < 0; }
+  function totalCobrar(c) {
+    var fs = c.facturas || [];
+    if (!fs.length) return Math.max(0, +c.importe || 0);
+    return fs.reduce(function (a, f) { var m = Math.abs(+f.importe || 0); return a + (esNotaCredito(f) ? -m : m); }, 0);
+  }
   function fichaCliente(cod) {
     var c = ruta().clientes[cod], vis = visita(cod);
     var facts = c.facturas || [];
@@ -402,6 +409,11 @@
       '<p class="ven">Ventana: <b>' + esc(c.ventana || 'Sin ventana') + '</b>' + (c.pago ? ' · Pago pendiente: <b>' + esc(c.pago) + '</b>' : '') + '</p></div>' +
       '<button type="button" class="icono-btn cerrar" data-cerrar aria-label="Cerrar">✕</button></div>';
     if (vis) h += '<p class="ya ' + vis.estado + '">' + TXT_EST[vis.estado] + (vis.motivo ? ': ' + esc(vis.motivo) : '') + (vis.nota ? ' (' + esc(vis.nota) + ')' : '') + ' a las ' + hhmm(vis.tLocal) + '. Podés corregirlo abajo.</p>';
+    if (facts.length) {
+      var nNC = facts.filter(esNotaCredito).length;
+      h += '<div class="cobrar"><span>Total a cobrar</span><b>' + plata(totalCobrar(c)) + '</b>' +
+        (facts.length > 1 ? '<small>' + (facts.length - nNC) + (facts.length - nNC === 1 ? ' factura' : ' facturas') + (nNC ? ' menos ' + nNC + (nNC === 1 ? ' nota de crédito' : ' notas de crédito') : '') + ' · detalle abajo</small>' : '') + '</div>';
+    }
     var nc = !vis && st.nc[cod];
     if (nc) h += '<p class="ya nc ' + nc.estado + '">' + textoNC(nc) + '</p>';
     if (!vis) {
@@ -424,8 +436,10 @@
     else h += '<button type="button" class="btn sec ancho" disabled>Sin teléfono cargado en la base</button>';
     if (c.ll) h += '<a class="btn sec ancho" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=' + c.ll[0] + ',' + c.ll[1] + '">Cómo llegar (Google Maps)</a>';
     if (facts.length) {
-      h += '<h3>Facturas</h3>' + facts.map(function (f) {
-        return '<details class="fact"><summary><b>' + esc(f.nro) + '</b><span>' + importeTxt(f.importe) + '</span></summary><table><tr><th>SKU</th><th class="r">Bultos</th><th class="r">Importe</th></tr>' +
+      var hayNC = facts.some(esNotaCredito);
+      h += '<h3>' + (hayNC ? 'Facturas y notas de crédito' : 'Facturas') + '</h3>' + facts.map(function (f) {
+        var nc = esNotaCredito(f);
+        return '<details class="fact' + (nc ? ' nc' : '') + '"><summary><b>' + esc(f.nro) + (nc ? ' <small>Nota de crédito</small>' : '') + '</b><span>' + (nc ? '− ' + plata(Math.abs(+f.importe || 0)) : importeTxt(f.importe)) + '</span></summary><table><tr><th>SKU</th><th class="r">Bultos</th><th class="r">Importe</th></tr>' +
           (f.items || []).map(function (it) { return '<tr><td>' + esc(it.sku) + (it.desc ? ' <small>' + esc(it.desc) + '</small>' : '') + '</td><td class="r">' + esc(it.bultos) + '</td><td class="r">' + importeTxt(it.importe) + '</td></tr>'; }).join('') + '</table></details>';
       }).join('');
     }
@@ -495,7 +509,7 @@
   }
   function avisoDe(cod) { return (leer('ldAppAvisos', {})[DIA + '|' + st.pat] || {})[cod] || null; }
   function plata(n) { return '$ ' + Math.round(n || 0).toLocaleString('es-AR'); }
-  function montoDe(c) { return c.importe || (c.facturas || []).reduce(function (a, f) { return a + (+f.importe || 0); }, 0); }
+  function montoDe(c) { return totalCobrar(c); }
   function textoAviso(c, hora, link) {
     return 'Hola, nos comunicamos de Logística Total S.R.L., su pedido está en camino, llegará a las ' + hora + '. ' +
       'Recordá tener listo ' + plata(montoDe(c)) + (c.cajones ? ' y ' + c.cajones + (c.cajones === 1 ? ' cajón con sus botellas retornables' : ' cajones con sus botellas retornables') : '') + '. Gracias' +

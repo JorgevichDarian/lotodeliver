@@ -227,3 +227,13 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--naranja)
 .wa-prev{background:#DCF8C6;color:#1F2A1A;border-radius:12px 12px 12px 4px;padding:12px 14px;font-size:16px;line-height:1.45;margin:6px 0 14px;white-space:pre-wrap}
 .ya.avisado{background:#DCF8C6;color:#13612F}
 .cli-av{display:block;margin-top:3px;font-size:13px;font-weight:700;color:#13612F}
+
+/* total a cobrar */
+.cobrar{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:2px 12px;background:#16181D;color:#fff;border-radius:12px;padding:14px 16px;margin:4px 0 12px}
+.cobrar span{font-weight:600;font-size:16px;color:#D5D8DE}
+.cobrar b{font:700 30px/1 var(--cond);color:#FFB877;font-variant-numeric:tabular-nums}
+.cobrar small{flex-basis:100%;font-size:13px;color:#AEB4BE}
+.fact.nc summary span{color:#C0362C}
+.fact.nc summary b small{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:8px;background:#FBE3E2;color:#9E2B25;font-size:11px;font-weight:700;vertical-align:2px}
+.cli-cobrar{display:block;margin-top:3px;font-size:14px;font-weight:700;color:var(--tinta)}
+
