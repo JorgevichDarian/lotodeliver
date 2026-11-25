@@ -17,7 +17,7 @@
     <div>
     <span class="empresa">Logística Total SRL</span>
     <h1>Tablero de ruta <span class="lotod">LoToDeliver</span></h1>
-    <p class="donde"><span id="hoy">CD Neuquén</span> <span class="ver">v1.12.1</span></p>
+    <p class="donde"><span id="hoy">CD Neuquén</span> <span class="ver">v1.13.0</span></p>
     </div>
   </div>
   <div class="fuentes" aria-label="Fuentes de datos">
@@ -33,6 +33,7 @@
   <a href="#mapa" id="tab-mapa" role="tab">Ver en mapa</a>
   <a href="#choferes" id="tab-choferes" role="tab">App choferes</a>
   <a href="#historico" id="tab-historico" role="tab">Histórico</a>
+  <a href="#consultas" id="tab-consultas" role="tab">Consultas equipo comercial</a>
   <a href="#guia" id="tab-guia" role="tab">Guía instalación extensión</a>
   <div class="ajustes">
     <label class="chk"><input type="checkbox" id="auto" checked> Actualizar cada 5 min</label>
@@ -55,6 +56,13 @@
 <section id="mapa" class="mapa-vista" hidden></section>
 <section id="choferes" class="choferes-vista" hidden></section>
 <section id="historico" class="historico-vista" hidden></section>
+<section id="consultas" class="consultas-vista" hidden>
+  <h2>Consultas equipo comercial</h2>
+  <p class="cs-sub">Buscá un cliente por código o nombre para ver el estado de su pedido, la hora estimada de llegada y si su ruta está abierta. Día de entrega: <b id="cs-dia"></b> (se cambia arriba, en "Día de entrega").</p>
+  <div class="cs-buscar"><input type="search" id="cs-q" placeholder="Código o nombre del cliente" autocomplete="off" aria-label="Buscar cliente" aria-controls="cs-lista"></div>
+  <div id="cs-lista" role="listbox" aria-label="Clientes encontrados"></div>
+  <div id="cs-res" aria-live="polite"></div>
+</section>
 <section id="guia" class="guia-vista" hidden>
 <h2 class="gt">Guía de instalación de la extensión</h2>
 <p class="lead">Reporte en vivo del estado de cada camión. Los datos los trae una extensión de Chrome, que lee Nextbyn y Chess con tu propia sesión.</p>

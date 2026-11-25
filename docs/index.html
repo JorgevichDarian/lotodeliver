@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=1.12.1">
-<link rel="stylesheet" href="reporte.css?v=1.12.1">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=1.13.0">
+<link rel="stylesheet" href="reporte.css?v=1.13.0">
 </head>
 <body>
 <header class="barra">
@@ -18,7 +18,7 @@
     <div>
     <span class="empresa">Logística Total SRL</span>
     <h1>Tablero de ruta <span class="lotod">LoToDeliver</span></h1>
-    <p class="donde"><span id="hoy">CD Neuquén</span> <span class="ver">v1.12.1</span></p>
+    <p class="donde"><span id="hoy">CD Neuquén</span> <span class="ver">v1.13.0</span></p>
     </div>
   </div>
   <div class="fuentes" aria-label="Fuentes de datos">
@@ -34,6 +34,7 @@
   <a href="#mapa" id="tab-mapa" role="tab">Ver en mapa</a>
   <a href="#choferes" id="tab-choferes" role="tab">App choferes</a>
   <a href="#historico" id="tab-historico" role="tab">Histórico</a>
+  <a href="#consultas" id="tab-consultas" role="tab">Consultas equipo comercial</a>
   <a href="#guia" id="tab-guia" role="tab">Guía instalación extensión</a>
   <div class="ajustes">
     <label class="chk"><input type="checkbox" id="auto" checked> Actualizar cada 5 min</label>
@@ -56,6 +57,13 @@
 <section id="mapa" class="mapa-vista" hidden></section>
 <section id="choferes" class="choferes-vista" hidden></section>
 <section id="historico" class="historico-vista" hidden></section>
+<section id="consultas" class="consultas-vista" hidden>
+  <h2>Consultas equipo comercial</h2>
+  <p class="cs-sub">Buscá un cliente por código o nombre para ver el estado de su pedido, la hora estimada de llegada y si su ruta está abierta. Día de entrega: <b id="cs-dia"></b> (se cambia arriba, en "Día de entrega").</p>
+  <div class="cs-buscar"><input type="search" id="cs-q" placeholder="Código o nombre del cliente" autocomplete="off" aria-label="Buscar cliente" aria-controls="cs-lista"></div>
+  <div id="cs-lista" role="listbox" aria-label="Clientes encontrados"></div>
+  <div id="cs-res" aria-live="polite"></div>
+</section>
 <section id="guia" class="guia-vista" hidden>
 <h2 class="gt">Guía de instalación de la extensión</h2>
 <p class="lead">Reporte en vivo del estado de cada camión. Los datos los trae una extensión de Chrome, que lee Nextbyn y Chess con tu propia sesión.</p>
@@ -186,11 +194,11 @@
 <li>Para actualizar la extensión: descargá la nueva versión, reemplazá los archivos de la carpeta y en <code>chrome://extensions</code> tocá el botón de recargar de <b>Tablero de ruta</b>.</li>
 </ul></div>
 </section>
-<script src="vendor/leaflet/leaflet.js?v=1.12.1"></script>
-<script src="firebase-config.js?v=1.12.1"></script>
-<script src="lt-firebase.js?v=1.12.1"></script>
-<script src="choferes.js?v=1.12.1"></script>
-<script src="reporte.js?v=1.12.1"></script>
-<script src="mapa.js?v=1.12.1"></script>
+<script src="vendor/leaflet/leaflet.js?v=1.13.0"></script>
+<script src="firebase-config.js?v=1.13.0"></script>
+<script src="lt-firebase.js?v=1.13.0"></script>
+<script src="choferes.js?v=1.13.0"></script>
+<script src="reporte.js?v=1.13.0"></script>
+<script src="mapa.js?v=1.13.0"></script>
 </body>
 </html>

@@ -627,6 +627,7 @@
       return e ? { min: e.prom, fuente: 'historial', n: e.n, hist: e.prom } : null;
     },
     demVersion: function () { return demVer; },
+    sesionDe: function (pat) { var s = st.sesiones[pat]; return s ? { inicio: s.inicio || null, fin: s.fin || null, nombre: s.nombre || s.usuario || '' } : null; },
     // Jornada abierta en la app (para que el modulador la cierre si el chofer se olvidó).
     jornadaAbierta: function (pat) { var s = st.sesiones[pat]; return !!(fb && fb.sesion() && esModulador() && s && s.inicio && !s.fin); },
     cerrarJornada: function (pat) {

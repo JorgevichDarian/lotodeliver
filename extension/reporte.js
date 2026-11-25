@@ -59,7 +59,7 @@
   var pr = leerLS(CLAVE_PRIO, null); // { mapa, at }
   var CLAVE_VENT = 'ldReporteVent', CLAVE_OBS = 'ldReporteObs';
   var vt = leerLS(CLAVE_VENT, null); // { v: 3, mapa: { codigo: { f: [[desde, hasta] en minutos], nota, pago, ll: [lat, lng] } }, at }
-  if (vt && vt.v !== 6) vt = null; // caché anterior sin pago pendiente, ubicación o teléfono
+  if (vt && vt.v !== 7) vt = null; // caché anterior sin pago pendiente, ubicación o teléfono
   var errVt = '', leyendoVt = false;
   var abiertos = {}, clientesAbiertos = {};
   var ocupado = { nextbyn: false, chess: false };
@@ -186,7 +186,7 @@
     leyendoVt = true;
     pedir('ventanas').then(function (data) {
       var mv = armarVentanas(data.csv);
-      vt = { v: 6, mapa: mv, at: data.at, conTel: !!mv.__conTel };
+      vt = { v: 7, mapa: mv, at: data.at, conTel: !!mv.__conTel };
       delete mv.__conTel;
       errVt = '';
       guardarLS(CLAVE_VENT, vt);
@@ -564,7 +564,7 @@
       var txt = String(f[2] || '').trim(), fr = [], re = /(\d{2}):(\d{2}) a (\d{2}):(\d{2})/g, m;
       while ((m = re.exec(txt))) fr.push([+m[1] * 60 + +m[2], +m[3] * 60 + +m[4]]);
       var limpio = /^\d{2}:\d{2} a \d{2}:\d{2}(; \d{2}:\d{2} a \d{2}:\d{2})*$/.test(txt);
-      mapa[cod] = { f: limpio ? fr : [], nota: !limpio && txt ? txt : '', pago: pagoAutorizado(f[3], f[4]), ll: ubicacion(f[6], f[5]), tel: telefonos(f[8], f[7]) };
+      mapa[cod] = { f: limpio ? fr : [], nota: !limpio && txt ? txt : '', pago: pagoAutorizado(f[3], f[4]), ll: ubicacion(f[6], f[5]), tel: telefonos(f[8], f[7]), nombre: String(f[1] || '').trim() };
       n++;
     });
     if (!n) throw new Error('La hoja de ventanas horarias no tiene clientes con código.');
@@ -966,6 +966,7 @@
   }
 
   function pintar() {
+    if ($('consultas') && !$('consultas').hidden) setTimeout(function () { if (csSel) csMostrar(csSel); else csBuscar(); }, 0); // Consultas al día con cada cambio
     pintarBotones();
     pintarSub();
     if (window.LTMapa) setTimeout(window.LTMapa.refrescar, 0);
@@ -1452,16 +1453,86 @@
   window.LTReporte = { datosMapa: datosMapa, esc: esc, hhmm: hhmm };
 
   // ---------- pestañas: Tablero / Ver en mapa / Histórico / Guía instalación extensión ----------
+  // ---------- Consultas equipo comercial ----------
+  // Busca en la base de clientes y en las rutas del día elegido; muestra estado, llegada estimada y ruta.
+  var csSel = '';
+  function mmhh(m) { m = Math.round(m) % 1440; return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2); }
+  // Con la pestaña abierta, el resultado se refresca cada minuto (y con cada actualización de datos).
+  setInterval(function () { if (!$('consultas').hidden && csSel) csMostrar(csSel); }, 60000);
+  function csIndice() {
+    var idx = {}, ahora = ahoraRef();
+    if (vt && vt.mapa) Object.keys(vt.mapa).forEach(function (cod) { idx[cod] = { cod: cod, nombre: vt.mapa[cod].nombre || '', rutas: [] }; });
+    ((nb && nb.cams) || []).forEach(function (cam) {
+      var pat = String(cam.patente).toUpperCase();
+      listaClientes(pat).forEach(function (c) {
+        var cod = c.codigo || String(c.cliente).split(' - ')[0];
+        var x = idx[cod] || (idx[cod] = { cod: cod, nombre: '', rutas: [] });
+        if (!x.nombre) x.nombre = String(c.cliente).replace(/^\s*\d+\s*-\s*/, '');
+        x.rutas.push({ pat: pat, cam: cam, c: c });
+      });
+    });
+    return idx;
+  }
+  function csBuscar() {
+    var q = ($('cs-q').value || '').trim(), lista = $('cs-lista');
+    $('cs-dia').textContent = (function () { var d = fechaDe(selDia); return dias[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1); })();
+    if (!q) { lista.innerHTML = ''; if (!csSel) $('cs-res').innerHTML = ''; else csMostrar(csSel); return; }
+    var idx = csIndice(), pal = q.split(/\s+/).map(nz).filter(Boolean);
+    var hits = Object.keys(idx).map(function (k) { return idx[k]; }).filter(function (x) {
+      var n = nz(x.nombre);
+      return x.cod === q || pal.every(function (p) { return n.indexOf(p) >= 0 || x.cod.indexOf(p) === 0; });
+    }).sort(function (a, b) { return (b.cod === q) - (a.cod === q) || (b.rutas.length > 0) - (a.rutas.length > 0) || a.nombre.localeCompare(b.nombre); });
+    if (hits.length === 1 || (hits.length && hits[0].cod === q)) { lista.innerHTML = ''; csMostrar(hits[0].cod); return; }
+    lista.innerHTML = !hits.length ? '<p class="cs-nada">No se encontró ningún cliente con "' + esc(q) + '" en la base ni en las rutas del día.</p>'
+      : hits.slice(0, 25).map(function (x) { return '<button type="button" role="option" class="cs-op" data-cs="' + esc(x.cod) + '"><b>' + esc(x.cod) + '</b> ' + esc(x.nombre) + (x.rutas.length ? '<span class="cs-tiene">con pedido</span>' : '<span class="cs-no">sin pedido</span>') + '</button>'; }).join('') +
+        (hits.length > 25 ? '<p class="cs-nada">Hay ' + hits.length + ' coincidencias: escribí más para acotar.</p>' : '');
+  }
+  function csMostrar(cod) {
+    csSel = cod;
+    var idx = csIndice(), x = idx[cod], res = $('cs-res'), ahora = ahoraRef();
+    var d = fechaDe(selDia), diaTxt = dias[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1);
+    if (!x) { res.innerHTML = '<div class="cs-alerta">No se encontró el cliente ' + esc(cod) + '.</div>'; return; }
+    var h = '<div class="cs-cab"><span class="cs-cod">' + esc(x.cod) + '</span><h3>' + esc(x.nombre || 'Cliente ' + x.cod) + '</h3></div>';
+    if (!nb) h += '<div class="cs-alerta">Todavía no se cargaron las rutas del ' + diaTxt + '. Esperá a que termine la actualización.</div>';
+    else if (!x.rutas.length) h += '<div class="cs-alerta"><b>⚠ El cliente no tiene pedido para el ' + diaTxt + '.</b> No figura en ninguna hoja de ruta de ese día.</div>';
+    x.rutas.forEach(function (r) {
+      var c = r.c, cam = r.cam, pr = proyeccion(r.pat, ahora).porCli[claveCli(c)] || null;
+      var ses = window.LTChoferes && LTChoferes.sesionDe ? LTChoferes.sesionDe(r.pat) : null;
+      var ruta = modoApp()
+        ? (ses && ses.inicio && !ses.fin ? ['abierta', 'Ruta abierta', 'Salió a las ' + hhmm(ses.inicio) + (ses.nombre ? ' · chofer ' + ses.nombre : '')]
+          : ses && ses.fin ? ['cerrada', 'Ruta cerrada', 'Cerró a las ' + hhmm(ses.fin)] : ['espera', 'La ruta todavía no salió', ''])
+        : (cam.estado === 'ABIERTA' ? ['abierta', 'Ruta abierta', cam.inicio ? 'Salió a las ' + hhmm(cam.inicio) : ''] : cam.estado === 'CERRADA' ? ['cerrada', 'Ruta cerrada', ''] : ['espera', 'La ruta todavía no salió', '']);
+      var he = c.est ? horaEntrega(r.pat, c) : null, v = vt && vt.mapa ? vt.mapa[x.cod] : null;
+      var llegada = c.est ? (he ? 'Visitado a las ' + hhmm(he.t) : 'Visitado') : pr && pr.eta ? (pr.enCliente ? 'El camión está en el cliente' : '~' + hhmm(pr.eta)) : '—';
+      var riesgo = !c.est && pr ? { riesgo: 'Podría llegar fuera de su horario', justo: 'Llegaría justo antes de que cierre su horario', antes: 'Llegaría antes de que abra su horario', vencido: 'Su horario de entrega ya pasó' }[pr.riesgo] || '' : '';
+      h += '<div class="cs-ruta"><div class="cs-ruta-cab">' + chapa(r.pat) + '<div><b>' + esc(cam.chofer || '') + '</b></div><span class="cs-est ' + ruta[0] + '">' + ruta[1] + '</span></div>' +
+        '<dl class="cs-dl"><dt>Estado del pedido</dt><dd>' + pillEstado(c) + '</dd>' +
+        '<dt>' + (c.est ? 'Entrega' : 'Llegada estimada') + '</dt><dd><b class="cs-eta">' + llegada + '</b>' + (riesgo ? '<span class="cs-riesgo">' + riesgo + '</span>' : '') +
+          (!c.est && pr && pr.pos ? '<span class="cs-sub">' + (pr.pos === 1 ? 'Es la próxima entrega del camión' : (pr.pos - 1) + ' entregas antes que la suya') + '</span>' : '') + '</dd>' +
+        '<dt>Ruta</dt><dd>' + ruta[1] + (ruta[2] ? ' <span class="cs-sub">' + esc(ruta[2]) + '</span>' : '') + '</dd>' +
+        '<dt>Horario del cliente</dt><dd>' + esc(v && v.f && v.f.length ? v.f.map(function (w) { return mmhh(w[0]) + ' a ' + mmhh(w[1]); }).join('; ') : v && v.nota ? v.nota : 'Sin horario') + '</dd>' +
+        (c.importe ? '<dt>Importe del pedido</dt><dd>$ ' + Math.round(c.importe).toLocaleString('es-AR') + '</dd>' : '') +
+        (c.aviso ? '<dt>Aviso al cliente</dt><dd>WhatsApp a las ' + hhmm(c.aviso.t) + ' (llegada informada ' + esc(c.aviso.hora) + ')</dd>' : '') +
+        (c.nc ? '<dt>Visita no concretada</dt><dd>' + esc(c.nc.motivo) + (c.nc.nota ? ': ' + esc(c.nc.nota) : '') + '</dd>' : '') + '</dl></div>';
+    });
+    res.innerHTML = h;
+  }
+  $('cs-q').addEventListener('input', function () { csSel = ''; csBuscar(); });
+  $('cs-lista').addEventListener('click', function (e) { var b = e.target.closest('[data-cs]'); if (b) { $('cs-lista').innerHTML = ''; csMostrar(b.getAttribute('data-cs')); } });
+
   function mostrarVista() {
-    var v = location.hash === '#guia' ? 'guia' : location.hash === '#historico' ? 'historico' : location.hash === '#mapa' ? 'mapa' : location.hash === '#choferes' ? 'choferes' : 'tablero';
+    var v = location.hash === '#consultas' ? 'consultas' : location.hash === '#guia' ? 'guia' : location.hash === '#historico' ? 'historico' : location.hash === '#mapa' ? 'mapa' : location.hash === '#choferes' ? 'choferes' : 'tablero';
     $('main').hidden = v !== 'tablero';
     $('guia').hidden = v !== 'guia';
     $('historico').hidden = v !== 'historico';
     $('mapa').hidden = v !== 'mapa';
     $('choferes').hidden = v !== 'choferes';
+    $('consultas').hidden = v !== 'consultas';
     document.body.classList.toggle('ver-guia', v !== 'tablero');
     document.body.classList.toggle('ver-mapa', v === 'mapa');
-    ['tablero', 'mapa', 'choferes', 'historico', 'guia'].forEach(function (k) {
+    document.body.classList.toggle('ver-consultas', v === 'consultas');
+    if (v === 'consultas') { csBuscar(); setTimeout(function () { $('cs-q').focus(); }, 50); }
+    ['tablero', 'mapa', 'choferes', 'historico', 'consultas', 'guia'].forEach(function (k) {
       $('tab-' + k).classList.toggle('act', v === k);
       $('tab-' + k).setAttribute('aria-selected', String(v === k));
     });

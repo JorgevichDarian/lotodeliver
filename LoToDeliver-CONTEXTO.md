@@ -73,6 +73,9 @@ Este archivo sirve para retomar el proyecto en un chat nuevo: adjuntalo o pedile
 ## Total a cobrar (app)
 - Ficha del cliente: recuadro "Total a cobrar" arriba (facturas menos notas de crédito) y en la lista de pendientes "A cobrar $ X". Nota de crédito = comprobante cuyo número contiene "NOTA DE CREDITO", "N.CRED", empieza con "NC" o tiene importe negativo; se resta en valor absoluto. El mismo total se usa en el WhatsApp y en la página de seguimiento.
 
+## Consultas equipo comercial (1.13.0)
+- Pestaña nueva del Tablero (#consultas): busca por código o nombre en la base de clientes (la base ahora guarda `nombre` = columna F; caché `vt.v = 7`) y en las rutas del día elegido. Sin pedido ese día → alerta. Con pedido: camión, estado (pill), llegada estimada (misma proyección que "En riesgo") o hora de visita, entregas antes que la suya, ruta abierta / cerrada / sin salir (sesión de la app o estado de Nextbyn), horario, importe, aviso por WhatsApp y visita no concretada. Se refresca con cada cambio de datos y cada minuto. El selector de día queda visible en esa pestaña.
+
 ## Estructura
 - `extension/`: extensión MV3 y el tablero (se publica igual en `docs/`).
   - `bg.js` (service worker: lee Chess y hojas de Google con la sesión del usuario), `lectores.js` (lectores inyectados en Chess/Nextbyn), `base-clientes.js` (base de clientes diaria desde Chess).
