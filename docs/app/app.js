@@ -258,7 +258,10 @@
     }).join('');
     Array.prototype.forEach.call(nav.querySelectorAll('button'), function (b) { b.onclick = function () { verVista(b.getAttribute('data-v')); }; });
   }
-  function verVista(v) {
+  function verVista(v, desdeAtras) {
+    // Botón "atrás" del celular: Mapa y Descuentos vuelven a Clientes.
+    if (!desdeAtras && v !== 'clientes' && st.vista === 'clientes') history.pushState({ lt: 'vista' }, '');
+    else if (!desdeAtras && v === 'clientes' && st.vista !== 'clientes' && history.state && history.state.lt === 'vista') { history.back(); return; }
     st.vista = v;
     ['clientes', 'mapa', 'desc'].forEach(function (k) { document.getElementById('v-' + (k === 'desc' ? 'desc' : k)).hidden = k !== v; });
     if (v === 'desc') marcarVistos();
@@ -946,7 +949,26 @@
   }
 
   // ---------- hoja (panel que sube desde abajo) ----------
+  // ---------- botón "atrás" del celular ----------
+  // Cada hoja (ficha, formularios) y cada vista secundaria agregan un paso al historial: "atrás" la cierra
+  // en lugar de salir de la app. En la pantalla principal hay que tocar "atrás" dos veces para salir.
+  var hojaEnHistorial = false, ultimoAtras = 0, ignorarPop = false;
+  history.replaceState({ lt: 'base' }, '');
+  history.pushState({ lt: 'app' }, '');
+  window.addEventListener('popstate', function (e) {
+    var est = e.state && e.state.lt;
+    if (ignorarPop) { ignorarPop = false; return; } // lo disparó cerrarHoja() al sacar su paso del historial
+    if (!$hoja.hidden) { hojaEnHistorial = false; cerrarHojaUI(); if (est === 'hoja') history.back(); return; }
+    if (st.pat && st.vista !== 'clientes') { verVista('clientes', true); return; }
+    if (est === 'base') {
+      if (Date.now() - ultimoAtras < 2500) { history.back(); return; } // segundo "atrás": sale
+      ultimoAtras = Date.now();
+      history.pushState({ lt: 'app' }, '');
+      avisar('Tocá atrás de nuevo para salir de la app.');
+    }
+  });
   function abrirHoja(html) {
+    if ($hoja.hidden && !hojaEnHistorial) { history.pushState({ lt: 'hoja' }, ''); hojaEnHistorial = true; }
     $hoja.innerHTML = '<div class="hoja-fondo" data-cerrar></div><div class="hoja-panel" role="dialog" aria-modal="true">' + html + '</div>';
     $hoja.hidden = false;
     document.body.classList.add('con-hoja');
@@ -954,7 +976,11 @@
     var p = $hoja.querySelector('.hoja-panel');
     p.scrollTop = 0;
   }
-  function cerrarHoja() { $hoja.hidden = true; $hoja.innerHTML = ''; document.body.classList.remove('con-hoja'); }
+  function cerrarHojaUI() { $hoja.hidden = true; $hoja.innerHTML = ''; document.body.classList.remove('con-hoja'); }
+  function cerrarHoja() {
+    cerrarHojaUI();
+    if (hojaEnHistorial) { hojaEnHistorial = false; if (history.state && history.state.lt === 'hoja') { ignorarPop = true; history.back(); } }
+  }
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$hoja.hidden) cerrarHoja(); });
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () {});
