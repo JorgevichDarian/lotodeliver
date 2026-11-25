@@ -515,8 +515,10 @@
   function montoDe(c) { return totalCobrar(c); }
   function textoAviso(c, hora, link) {
     return 'Hola, nos comunicamos de Logística Total S.R.L., su pedido está en camino, llegará a las ' + hora + '. ' +
-      'Recordá tener listo ' + plata(montoDe(c)) + (c.cajones ? ' y ' + c.cajones + (c.cajones === 1 ? ' cajón con sus botellas retornables' : ' cajones con sus botellas retornables') : '') + '. Gracias' +
-      (link ? '\n\nSeguí tu pedido en vivo: ' + link : '');
+      'Recordá tener listo ' + plata(montoDe(c)) + (c.cajones ? ' y ' + c.cajones + (c.cajones === 1 ? ' cajón con sus botellas retornables' : ' cajones con sus botellas retornables') : '') + '.' +
+      '\n\nRecordá que el máximo permitido de pago en efectivo, si está habilitado en su zona, es de $500.000.' +
+      '\nAlias de la empresa: *logisticatotal.macro*' + // entre asteriscos: WhatsApp lo muestra en negrita
+      (link ? '\n\nSeguí tu pedido en vivo: ' + link : '') + '\n\nGracias';
   }
 
   // ---------- seguimiento en vivo para el cliente (página pública con el token del link) ----------
