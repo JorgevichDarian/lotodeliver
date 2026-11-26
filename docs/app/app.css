@@ -237,3 +237,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--naranja)
 .fact.nc summary b small{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:8px;background:#FBE3E2;color:#9E2B25;font-size:11px;font-weight:700;vertical-align:2px}
 .cli-cobrar{display:block;margin-top:3px;font-size:14px;font-weight:700;color:var(--tinta)}
 
+.fact.desc-ap{display:flex;justify-content:space-between;gap:10px;padding:12px;min-height:48px;align-items:center;border-left:4px solid #e0b000;background:#fffbea}
+.fact.desc-ap small{display:block;font-weight:400;color:var(--suave,#666)}
+.fact.desc-ap span{font-weight:700;color:#b3261e;white-space:nowrap}

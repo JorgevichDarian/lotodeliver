@@ -110,7 +110,7 @@
   function escucharDia() {
     oyentes.forEach(function (o) { o.cerrar(); });
     oyentes = [
-      fb.escuchar('descuentos', function (v) { st.descuentos = v || {}; if (st.pat) { if (st.vista === 'desc') marcarVistos(); pintarDescuentos(); pintarNav(); } }, errorOyente, '&orderBy=' + encodeURIComponent('"dia"') + '&equalTo=' + encodeURIComponent('"' + DIA + '"')),
+      fb.escuchar('descuentos', function (v) { st.descuentos = v || {}; if (st.pat) { if (st.vista === 'desc') marcarVistos(); pintarDescuentos(); pintarNav(); pintarClientes(); } }, errorOyente, '&orderBy=' + encodeURIComponent('"dia"') + '&equalTo=' + encodeURIComponent('"' + DIA + '"')),
     ];
     consultarDia();
   }
@@ -400,10 +400,16 @@
   function importeTxt(n) { return '$ ' + Math.round(+n || 0).toLocaleString('es-AR'); }
   // ---------- total a cobrar: facturas menos notas de crédito ----------
   function esNotaCredito(f) { return /NOTA\s*(DE\s*)?CR[EÉ]D|N\.?\s*CR[EÉ]D|^N\.?C\.?[\s\-]|CREDITO/i.test(String(f.nro || '')) || +f.importe < 0; }
+  // Descuentos aprobados hoy por el modulador para este cliente (su monto se resta del total a cobrar:
+  // la nota de crédito que se emite después no viene en el reporte de repartos de Chess).
+  function descuentosAprobados(cod) {
+    return Object.keys(st.descuentos || {}).map(function (k) { var d = Object.assign({ id: k }, st.descuentos[k]); return d; })
+      .filter(function (d) { return d.cliente === cod && d.estado === 'aprobado' && +d.monto > 0 && (!d.dia || d.dia === DIA); });
+  }
   function totalCobrar(c) {
-    var fs = c.facturas || [];
-    if (!fs.length) return Math.max(0, +c.importe || 0);
-    return fs.reduce(function (a, f) { var m = Math.abs(+f.importe || 0); return a + (esNotaCredito(f) ? -m : m); }, 0);
+    var fs = c.facturas || [], desc = c.codigo ? descuentosAprobados(c.codigo).reduce(function (a, d) { return a + (+d.monto || 0); }, 0) : 0;
+    var bruto = !fs.length ? Math.max(0, +c.importe || 0) : fs.reduce(function (a, f) { var m = Math.abs(+f.importe || 0); return a + (esNotaCredito(f) ? -m : m); }, 0);
+    return bruto - desc;
   }
   function fichaCliente(cod) {
     var c = ruta().clientes[cod], vis = visita(cod);
@@ -413,9 +419,10 @@
       '<button type="button" class="icono-btn cerrar" data-cerrar aria-label="Cerrar">✕</button></div>';
     if (vis) h += '<p class="ya ' + vis.estado + '">' + TXT_EST[vis.estado] + (vis.motivo ? ': ' + esc(vis.motivo) : '') + (vis.nota ? ' (' + esc(vis.nota) + ')' : '') + ' a las ' + hhmm(vis.tLocal) + '. Podés corregirlo abajo.</p>';
     if (facts.length) {
-      var nNC = facts.filter(esNotaCredito).length;
-      h += '<div class="cobrar"><span>Total a cobrar</span><b>' + plata(totalCobrar(c)) + '</b>' +
-        (facts.length > 1 ? '<small>' + (facts.length - nNC) + (facts.length - nNC === 1 ? ' factura' : ' facturas') + (nNC ? ' menos ' + nNC + (nNC === 1 ? ' nota de crédito' : ' notas de crédito') : '') + ' · detalle abajo</small>' : '') + '</div>';
+      var nNC = facts.filter(esNotaCredito).length, dAp = descuentosAprobados(cod);
+      h += '<div class="cobrar"><span>Total a cobrar</span><b>' + plata(totalCobrar(Object.assign({ codigo: cod }, c))) + '</b>' +
+        (facts.length > 1 || dAp.length ? '<small>' + (facts.length - nNC) + (facts.length - nNC === 1 ? ' factura' : ' facturas') + (nNC ? ' menos ' + nNC + (nNC === 1 ? ' nota de crédito' : ' notas de crédito') : '') +
+          (dAp.length ? ' menos ' + (dAp.length === 1 ? '1 descuento aprobado' : dAp.length + ' descuentos aprobados') : '') + ' · detalle abajo</small>' : '') + '</div>';
     }
     var nc = !vis && st.nc[cod];
     if (nc) h += '<p class="ya nc ' + nc.estado + '">' + textoNC(nc) + '</p>';
@@ -440,7 +447,10 @@
     if (c.ll) h += '<a class="btn sec ancho" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=' + c.ll[0] + ',' + c.ll[1] + '">Cómo llegar (Google Maps)</a>';
     if (facts.length) {
       var hayNC = facts.some(esNotaCredito);
-      h += '<h3>' + (hayNC ? 'Facturas y notas de crédito' : 'Facturas') + '</h3>' + facts.map(function (f) {
+      var dAp2 = descuentosAprobados(cod);
+      h += '<h3>' + (hayNC || dAp2.length ? 'Facturas, notas de crédito y descuentos' : 'Facturas') + '</h3>' + dAp2.map(function (d) {
+        return '<div class="fact desc-ap"><b>Descuento aprobado <small>' + esc(d.motivo || '') + '</small></b><span>− ' + plata(+d.monto) + '</span></div>';
+      }).join('') + facts.map(function (f) {
         var nc = esNotaCredito(f);
         return '<details class="fact' + (nc ? ' nc' : '') + '"><summary><b>' + esc(f.nro) + (nc ? ' <small>Nota de crédito</small>' : '') + '</b><span>' + (nc ? '− ' + plata(Math.abs(+f.importe || 0)) : importeTxt(f.importe)) + '</span></summary><table><tr><th>SKU</th><th class="r">Bultos</th><th class="r">Importe</th></tr>' +
           (f.items || []).map(function (it) { return '<tr><td>' + esc(it.sku) + (it.desc ? ' <small>' + esc(it.desc) + '</small>' : '') + '</td><td class="r">' + esc(it.bultos) + '</td><td class="r">' + importeTxt(it.importe) + '</td></tr>'; }).join('') + '</table></details>';
