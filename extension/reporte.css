@@ -636,3 +636,10 @@ body.otro-dia .ahora,body.otro-dia .tag.a{display:none}
 /* en Consultas se ve el selector de día (y se ocultan los botones de actualizar) */
 body.ver-consultas .fuentes{display:flex}
 body.ver-consultas .fuentes > :not(.dia-ent):not(#b-hoy){display:none}
+/* Timer de espera de los pedidos de descuento */
+.ch-d-cab>div.ch-d-der{flex:0 0 auto;flex-direction:row;align-items:center;gap:6px}
+.ch-d-cab .ch-espera{font-size:13px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap;font-variant-numeric:tabular-nums;border:1px solid transparent}
+.ch-d-cab .ch-espera b{font-weight:800}
+.ch-d-cab .ch-espera.verde{background:#E3F5EA;color:#11663A;border-color:#A8DDBC}
+.ch-d-cab .ch-espera.amarillo{background:#FFF4CC;color:#7A5A00;border-color:#F2D46B}
+.ch-d-cab .ch-espera.rojo{background:#FDE2E2;color:#9B1C1C;border-color:#F3A8A8}

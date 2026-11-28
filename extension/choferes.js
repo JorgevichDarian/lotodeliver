@@ -445,6 +445,24 @@
       };
     });
   }
+  // Timer de espera de cada pedido de descuento: corre hasta que se responde.
+  // Menos de 3 min verde, de 3 a 5 amarillo, más de 5 rojo.
+  function inicioDesc(d) { return +d.t || +d.tLocal || 0; }
+  function chipEspera(d, abierto) {
+    var t0 = inicioDesc(d); if (!t0) return '';
+    var t1 = abierto ? 0 : +d.tResp || 0;
+    if (!abierto && !t1) return '';
+    return '<span class="ch-espera" data-t0="' + t0 + '"' + (t1 ? ' data-t1="' + t1 + '"' : '') + ' title="' + (abierto ? 'Esperando respuesta' : 'Tiempo hasta la respuesta') + '">' + (abierto ? '⏱ ' : 'Resp. en ') + '<b></b></span>';
+  }
+  function tickEspera() {
+    var el = document.getElementById('ch-desc'); if (!el) return;
+    Array.prototype.forEach.call(el.querySelectorAll('.ch-espera'), function (x) {
+      var ms = Math.max(0, (+x.getAttribute('data-t1') || Date.now()) - +x.getAttribute('data-t0')), seg = Math.floor(ms / 1000), m = Math.floor(seg / 60);
+      x.querySelector('b').textContent = (m >= 60 ? Math.floor(m / 60) + 'h ' + ('0' + m % 60).slice(-2) : m) + ':' + ('0' + seg % 60).slice(-2);
+      x.className = 'ch-espera ' + (ms < 3 * 60e3 ? 'verde' : ms <= 5 * 60e3 ? 'amarillo' : 'rojo');
+    });
+  }
+  setInterval(tickEspera, 1000);
   function pintarDescuentos() {
     var el = document.getElementById('ch-desc');
     if (!el) return;
@@ -452,7 +470,7 @@
     var resp = Object.keys(st.desc).map(function (k) { var d = st.desc[k]; d.id = k; return d; }).filter(function (d) { return d.estado !== 'pendiente'; }).sort(function (a, b) { return (b.tResp || 0) - (a.tResp || 0); });
     var item = function (d, abierto) {
       return '<li class="ch-d ' + d.estado + '"><div class="ch-d-cab">' + chapa(d.pat) + '<div><b>' + esc(d.cliente + ' · ' + (d.nombreCliente || '')) + '</b><span>' + esc(d.nombre || d.usuario) + ' · ' + (d.dia !== DIA ? d.dia.split('-').reverse().join('/') + ' ' : '') + hhmm(d.tLocal) + '</span></div>' +
-        (abierto ? '' : '<span class="ch-pill ' + d.estado + '">' + (d.estado === 'aprobado' ? 'Aprobado' : 'Rechazado') + '</span>') + '</div>' +
+        '<div class="ch-d-der">' + chipEspera(d, abierto) + (abierto ? '' : '<span class="ch-pill ' + d.estado + '">' + (d.estado === 'aprobado' ? 'Aprobado' : 'Rechazado') + '</span>') + '</div></div>' +
         '<dl><dt>Factura</dt><dd>' + esc(d.factura) + '</dd>' + (d.items && d.items.length
           ? '<dt>' + (d.items.length > 1 ? 'SKUs' : 'SKU') + '</dt><dd><ul class="ch-items">' + d.items.map(function (x) { return '<li>' + esc(x.sku + (x.desc ? ' - ' + x.desc : '')) + ' — <b>' + esc(x.cantidad) + ' bultos</b></li>'; }).join('') + '</ul>' + (d.items.length > 1 ? '<span class="ch-sub">Total: ' + esc(d.cantidad) + ' bultos</span>' : '') + '</dd>'
           : '<dt>SKU</dt><dd>' + esc(d.sku) + '</dd><dt>Cantidad</dt><dd>' + esc(d.cantidad) + '</dd>') + '<dt>Motivo</dt><dd>' + esc(d.motivo) + (d.detalle ? ': ' + esc(d.detalle) : '') + '</dd>' +
@@ -469,6 +487,7 @@
     if (activo && pend.some(function (d) { return d.id === activo; })) return;
     el.innerHTML = (pend.length ? '<ul class="ch-lista">' + pend.map(function (d) { return item(d, true); }).join('') + '</ul>' : '<p class="ch-vacio">No hay pedidos esperando respuesta.</p>') +
       (resp.length ? '<details class="ch-hechos"><summary>Respondidos hoy (' + resp.length + ')</summary><ul class="ch-lista">' + resp.map(function (d) { return item(d, false); }).join('') + '</ul></details>' : '');
+    tickEspera();
     Array.prototype.forEach.call(el.querySelectorAll('[data-ver]'), function (b) { b.onclick = function () { verAdjunto(b.getAttribute('data-ver'), b.getAttribute('data-nom')); }; });
     Array.prototype.forEach.call(el.querySelectorAll('[data-m]'), function (i) { i.oninput = function () { montoSel[i.getAttribute('data-m')] = i.value; i.classList.remove('falta'); }; });
     Array.prototype.forEach.call(el.querySelectorAll('[data-fq]'), function (b) { b.onclick = function (ev) { ev.preventDefault(); delete adjSel[b.getAttribute('data-fq')]; pintarDescuentos(); }; });

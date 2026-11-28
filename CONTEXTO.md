@@ -97,3 +97,8 @@ Este archivo sirve para retomar el proyecto en un chat nuevo: adjuntalo o pedile
 - Chess ERP `logisticatotal.chesserp.com/AR1176`: repartos (`/web/api/reporteRepartos/obtenerReporte`), liquidación (`planillasPendientes`, `estadoLiquidacion`), exportación de clientes (`/web/api/clientes/exportarClientes`). Solo lectura.
 - Hoja de clientes (ventanas, pago pendiente, coordenadas): `1o6Y0is6NK0BTW0z4Gj5coFKQ_3SFc9ZYArQYoaERDio`, columnas D, F, BO, W, CA, T, U.
 - Prioridades: `1Qw1O7IAliJQEj-3-ItGP_kYfWcFosSrr90vQHrKuRsg` (PL4.2 Carga ruteo). Histórico OT: `1kqOCYxMQEhT1TWf43lYzvaN4Oc0m-2GKAhoh2IaPC7k`.
+
+## Timer de espera en pedidos de descuento (v1.14.0)
+- Cada tarjeta de "Pedidos de descuento" del tablero muestra un timer desde que el chofer envió el pedido (`t` del servidor, o `tLocal`) hasta que se responde (`tResp`).
+- Colores: menos de 3 min verde, de 3 a 5 amarillo, más de 5 rojo. En "Respondidos hoy" queda fijo como "Resp. en m:ss".
+- Código: `chipEspera`, `tickEspera` (setInterval 1 s) en extension/choferes.js; estilos `.ch-espera` en reporte.css.
